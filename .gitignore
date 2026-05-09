@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+.expo/
+dist/
+
+# Environment
+.env
+.env.local
+frontend/.env
+backend/.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Build
+*.egg-info/
+build/
+.DS_Store

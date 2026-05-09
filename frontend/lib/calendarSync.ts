@@ -5,6 +5,11 @@ import { Platform } from 'react-native';
 
 WebBrowser.maybeCompleteAuthSession();
 
+// Google OAuth client ID: 698302867976-rbg4d6mvlq2787jo4jf3e60emtb8to3p.apps.googleusercontent.com
+// Required redirect URIs to add in Google Cloud Console → OAuth credentials:
+//   https://auth.expo.io/@your-expo-username/pathlight   (Expo Go / dev)
+//   pathlight://oauth                                     (standalone build)
+
 export type CalendarProvider = 'google' | 'apple';
 
 export interface PathLightEvent {

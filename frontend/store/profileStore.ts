@@ -1,0 +1,32 @@
+import { create } from 'zustand';
+import { Profile, fetchProfile, upsertProfile } from '@/lib/profileService';
+
+interface ProfileState {
+  profile: Profile | null;
+  loading: boolean;
+  load: () => Promise<void>;
+  save: (updates: Partial<Omit<Profile, 'user_id'>>) => Promise<void>;
+  clear: () => void;
+}
+
+export const useProfileStore = create<ProfileState>((set, get) => ({
+  profile: null,
+  loading: false,
+
+  load: async () => {
+    set({ loading: true });
+    try {
+      const profile = await fetchProfile();
+      set({ profile });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  save: async (updates) => {
+    const saved = await upsertProfile(updates);
+    set({ profile: saved });
+  },
+
+  clear: () => set({ profile: null }),
+}));

@@ -1,8 +1,15 @@
+import { getAccessToken } from './profileService';
+
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = await getAccessToken();
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    },
     ...options,
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);

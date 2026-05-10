@@ -7,16 +7,16 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 const AGENTS = [
   {
     id: 'edupath',
-    name: 'EduPath Agent',
-    role: 'Your personalized education roadmap — courses, schedules & degree planning.',
-    icon: '📚',
-    status: 'On track for Spring semester',
-    progress: 0.68,
-    progressLabel: 'Semester goals',
-    progressRight: '68%',
-    color: Colors.sage,
-    bgColor: Colors.sageLight,
-    action: 'View My Plan',
+    name: 'FocusPath Agent',
+    role: 'Detects your focus, rephrases tough content & switches between text, video or quiz — adapts to you in real time.',
+    icon: '🎯',
+    status: 'Attention mode: active',
+    progress: 0.52,
+    progressLabel: 'Modules mastered',
+    progressRight: '4 / 7',
+    color: '#C08A3A',
+    bgColor: '#fdf3e3',
+    action: 'Start Session',
     route: '/agents/edupath',
   },
   {
@@ -64,7 +64,7 @@ const AGENTS = [
 ] as const;
 
 const THIS_WEEK = [
-  { day: 'MON', title: 'Class: Psychology 101', sub: '10:00 AM – 11:30 AM', chip: 'EduPath', chipBg: Colors.sageLight, chipColor: '#3a7a50' },
+  { day: 'MON', title: 'Study Session: Psychology 101', sub: 'Adaptive · 10:00 AM – 11:30 AM', chip: 'FocusPath', chipBg: '#fdf3e3', chipColor: '#C08A3A' },
   { day: 'TUE', title: 'Job Application Deadline', sub: 'Target Corp · Remote', chip: 'CareerBoost', chipBg: '#e8eef7', chipColor: Colors.navy },
   { day: 'WED', title: 'Grant Confirmation Due', sub: 'Student Parent Scholarship', chip: 'FundFinder', chipBg: Colors.terraLight, chipColor: '#a04030' },
   { day: 'FRI', title: 'Therapy Session', sub: 'Dr. Ramos · 2:00 PM', chip: 'Wellness', chipBg: Colors.lavender, chipColor: '#5a4a90' },

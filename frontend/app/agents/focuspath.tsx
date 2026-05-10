@@ -1,14 +1,12 @@
 import { api } from '@/lib/api';
 import { Colors, Radius, Shadow } from '@/constants/theme';
 import { useRouter } from 'expo-router';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as FileSystem from 'expo-file-system';
-import { Audio } from 'expo-av';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
   Easing,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,19 +19,14 @@ import {
 type Mode = 'read' | 'watch' | 'quiz';
 type FocusLevel = 'high' | 'medium' | 'low';
 
-interface FaceData {
-  rollAngle: number;
-  yawAngle: number;
-  bounds: { size: { width: number; height: number } };
-}
-
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const TOPIC = 'Biology · Chapter 4: The Cell';
+const IS_NATIVE = Platform.OS !== 'web';
 
 const READ_TEXT =
   'The mitochondria is often called the powerhouse of the cell. ' +
-  'It generates most of the cell's supply of adenosine triphosphate (ATP), ' +
+  'It generates most of the cell’s supply of adenosine triphosphate (ATP), ' +
   'used as a source of chemical energy. Mitochondria are found in nearly all eukaryotic cells.';
 
 const QUIZ_OPTIONS = [
@@ -54,12 +47,10 @@ const MODES: { key: Mode; icon: string; label: string }[] = [
 function focusColor(level: FocusLevel) {
   return level === 'high' ? '#4caf7d' : level === 'medium' ? '#f5a623' : '#e05252';
 }
-
 function focusLabel(level: FocusLevel) {
   return level === 'high' ? 'High Focus' : level === 'medium' ? 'Drifting…' : 'Low Focus';
 }
-
-function faceToFocusLevel(faces: FaceData[]): FocusLevel {
+function faceToFocusLevel(faces: any[]): FocusLevel {
   if (faces.length === 0) return 'low';
   const { rollAngle, yawAngle } = faces[0];
   const drift = Math.abs(rollAngle) + Math.abs(yawAngle);
@@ -90,7 +81,7 @@ function AttentionBadge({ level }: { level: FocusLevel }) {
 }
 
 function FocusMeter({ level }: { level: FocusLevel }) {
-  const widthAnim = useRef(new Animated.Value(level === 'high' ? 0.85 : level === 'medium' ? 0.5 : 0.22)).current;
+  const widthAnim = useRef(new Animated.Value(0.85)).current;
   useEffect(() => {
     Animated.timing(widthAnim, {
       toValue: level === 'high' ? 0.85 : level === 'medium' ? 0.5 : 0.22,
@@ -106,7 +97,10 @@ function FocusMeter({ level }: { level: FocusLevel }) {
         <Animated.View
           style={[
             styles.meterFill,
-            { backgroundColor: focusColor(level), width: widthAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) },
+            {
+              backgroundColor: focusColor(level),
+              width: widthAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+            },
           ]}
         />
       </View>
@@ -115,19 +109,38 @@ function FocusMeter({ level }: { level: FocusLevel }) {
   );
 }
 
-function CameraFeed({ level, onFacesDetected, permission, onRequestPermission }: {
-  level: FocusLevel;
-  onFacesDetected: (faces: FaceData[]) => void;
-  permission: { granted: boolean } | null;
-  onRequestPermission: () => void;
-}) {
-  if (!permission) return <View style={styles.cameraCard}><ActivityIndicator /></View>;
+// Web demo camera (no native APIs)
+function DemoCameraFrame({ level }: { level: FocusLevel }) {
+  return (
+    <View style={styles.cameraFrame}>
+      <View style={styles.cameraCornerTL} />
+      <View style={styles.cameraCornerTR} />
+      <View style={styles.cameraCornerBL} />
+      <View style={styles.cameraCornerBR} />
+      <View style={styles.faceSilhouette}>
+        <Text style={{ fontSize: 42 }}>🧑‍💻</Text>
+        <Text style={{ fontSize: 11, color: '#6a8aaa', marginTop: 6 }}>Demo mode — open on device for live tracking</Text>
+      </View>
+      <View style={[styles.gazeDot, { backgroundColor: focusColor(level) }]} />
+    </View>
+  );
+}
+
+// Native camera (lazy-loaded so web never imports it)
+function NativeCameraFrame({ level, onFacesDetected }: { level: FocusLevel; onFacesDetected: (faces: any[]) => void }) {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { CameraView, useCameraPermissions } = require('expo-camera');
+  const [permission, requestPermission] = useCameraPermissions();
+
+  if (!permission) return <View style={styles.cameraFrame}><ActivityIndicator color={GOLD} /></View>;
 
   if (!permission.granted) {
     return (
-      <View style={[styles.cameraCard, styles.cameraPermission]}>
-        <Text style={styles.permissionText}>Camera access lets us track your attention in real time.</Text>
-        <TouchableOpacity style={styles.permissionBtn} onPress={onRequestPermission}>
+      <View style={[styles.cameraFrame, { justifyContent: 'center', alignItems: 'center', gap: 12, padding: 20 }]}>
+        <Text style={{ color: '#9aaabb', fontSize: 14, textAlign: 'center' }}>
+          Camera access enables real-time attention tracking.
+        </Text>
+        <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
           <Text style={styles.permissionBtnText}>Enable Camera</Text>
         </TouchableOpacity>
       </View>
@@ -135,32 +148,43 @@ function CameraFeed({ level, onFacesDetected, permission, onRequestPermission }:
   }
 
   return (
+    <View style={styles.cameraFrame}>
+      <CameraView
+        style={StyleSheet.absoluteFill}
+        facing="front"
+        onFacesDetected={({ faces }: { faces: any[] }) => onFacesDetected(faces)}
+        faceDetectorSettings={{ mode: 'fast', detectLandmarks: 'none', runClassifications: 'none', minDetectionInterval: 300, tracking: true }}
+      />
+      <View style={styles.cameraCornerTL} />
+      <View style={styles.cameraCornerTR} />
+      <View style={styles.cameraCornerBL} />
+      <View style={styles.cameraCornerBR} />
+      <View style={[styles.gazeDot, { backgroundColor: focusColor(level) }]} />
+    </View>
+  );
+}
+
+function CameraCard({ level, onFacesDetected, onDemoToggle }: {
+  level: FocusLevel;
+  onFacesDetected: (faces: any[]) => void;
+  onDemoToggle?: () => void;
+}) {
+  return (
     <View style={styles.cameraCard}>
-      <View style={styles.cameraFrame}>
-        <CameraView
-          style={StyleSheet.absoluteFill}
-          facing="front"
-          onFacesDetected={({ faces }) => onFacesDetected(faces as FaceData[])}
-          faceDetectorSettings={{
-            mode: 'fast',
-            detectLandmarks: 'none',
-            runClassifications: 'none',
-            minDetectionInterval: 300,
-            tracking: true,
-          }}
-        />
-        {/* HUD corners */}
-        <View style={styles.cameraCornerTL} />
-        <View style={styles.cameraCornerTR} />
-        <View style={styles.cameraCornerBL} />
-        <View style={styles.cameraCornerBR} />
-        {/* Gaze indicator */}
-        <View style={[styles.gazeDot, { backgroundColor: focusColor(level) }]} />
-      </View>
+      {IS_NATIVE
+        ? <NativeCameraFrame level={level} onFacesDetected={onFacesDetected} />
+        : <DemoCameraFrame level={level} />}
       <View style={styles.cameraInfo}>
         <AttentionBadge level={level} />
-        <Text style={styles.cameraSubText}>Front camera · Gaze & head tracking active</Text>
+        <Text style={styles.cameraSubText}>
+          {IS_NATIVE ? 'Front camera · Gaze & head tracking active' : 'Webcam · Gesture & gaze tracking'}
+        </Text>
       </View>
+      {!IS_NATIVE && (
+        <TouchableOpacity onPress={onDemoToggle} style={styles.debugBtn}>
+          <Text style={styles.debugBtnText}>Simulate focus change ↻</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -182,9 +206,7 @@ function ModeSelector({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => v
 }
 
 function ReadContent({ onRephrase, loading, rephrased }: {
-  onRephrase: () => void;
-  loading: boolean;
-  rephrased: string | null;
+  onRephrase: () => void; loading: boolean; rephrased: string | null;
 }) {
   return (
     <View style={[styles.contentCard, rephrased ? { borderLeftWidth: 4, borderLeftColor: GOLD } : {}]}>
@@ -231,12 +253,11 @@ function QuizContent({ selected, onSelect }: { selected: number | null; onSelect
       <Text style={styles.contentTitle}>Quick Check ✏️</Text>
       <Text style={styles.quizQuestion}>What is the primary role of mitochondria?</Text>
       {QUIZ_OPTIONS.map((opt, i) => {
-        const isSelected = selected === i;
         const isCorrect = i === 0;
         const showResult = selected !== null;
         let bg = Colors.border;
-        if (showResult && isSelected) bg = isCorrect ? '#d4f4e2' : '#fde8e8';
-        if (showResult && isCorrect && !isSelected) bg = '#d4f4e2';
+        if (showResult && selected === i) bg = isCorrect ? '#d4f4e2' : '#fde8e8';
+        if (showResult && isCorrect && selected !== i) bg = '#d4f4e2';
         return (
           <TouchableOpacity key={i} style={[styles.quizOption, { backgroundColor: bg }]} onPress={() => onSelect(i)} disabled={selected !== null}>
             <Text style={styles.quizOptionText}>{opt}</Text>
@@ -259,11 +280,9 @@ function VoiceBar({ speaking, loading, onToggle }: { speaking: boolean; loading:
         ])
       ).start();
     } else {
-      scale.stopAnimation();
-      scale.setValue(1);
+      scale.stopAnimation(); scale.setValue(1);
     }
   }, [speaking]);
-
   return (
     <View style={styles.voiceBar}>
       <View style={styles.voiceLeft}>
@@ -284,38 +303,37 @@ function VoiceBar({ speaking, loading, onToggle }: { speaking: boolean; loading:
 
 // ─── main screen ──────────────────────────────────────────────────────────────
 
+const FOCUS_CYCLE: FocusLevel[] = ['high', 'medium', 'low'];
+
 export default function FocusPathScreen() {
   const router = useRouter();
-  const [permission, requestPermission] = useCameraPermissions();
-
   const [mode, setMode] = useState<Mode>('read');
   const [focusLevel, setFocusLevel] = useState<FocusLevel>('high');
   const [quizSelected, setQuizSelected] = useState<number | null>(null);
-
   const [rephrased, setRephrased] = useState<string | null>(null);
   const [rephraseLoading, setRephraseLoading] = useState(false);
-
-  const [hint, setHint] = useState('You're doing great — keep going! 🌟');
+  const [hint, setHint] = useState('You’re doing great — keep going! 🌟');
   const [hintLoading, setHintLoading] = useState(false);
-
   const [speaking, setSpeaking] = useState(false);
   const [voiceLoading, setVoiceLoading] = useState(false);
-  const soundRef = useRef<Audio.Sound | null>(null);
-
-  // Attention tracking: debounce face data so a single frame doesn't thrash state
+  const soundRef = useRef<any>(null);
   const focusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleFaces = useCallback((faces: FaceData[]) => {
+
+  const handleFaces = useCallback((faces: any[]) => {
     const next = faceToFocusLevel(faces);
     if (focusTimer.current) clearTimeout(focusTimer.current);
     focusTimer.current = setTimeout(() => setFocusLevel(next), 400);
   }, []);
+
+  const cycleDemoFocus = () =>
+    setFocusLevel((prev) => FOCUS_CYCLE[(FOCUS_CYCLE.indexOf(prev) + 1) % 3]);
 
   // Auto-adapt mode when focus drops
   useEffect(() => {
     if (focusLevel === 'low' && mode === 'read') setMode('watch');
   }, [focusLevel]);
 
-  // Fetch a fresh AI hint whenever focus or mode changes
+  // Fetch AI hint on focus/mode change
   useEffect(() => {
     let cancelled = false;
     setHintLoading(true);
@@ -326,9 +344,8 @@ export default function FocusPathScreen() {
     return () => { cancelled = true; };
   }, [focusLevel, mode]);
 
-  // Clean up sound on unmount
   useEffect(() => {
-    return () => { soundRef.current?.unloadAsync(); };
+    return () => { soundRef.current?.unloadAsync?.(); };
   }, []);
 
   async function handleRephrase() {
@@ -345,24 +362,28 @@ export default function FocusPathScreen() {
 
   async function handleVoiceToggle() {
     if (speaking) {
-      await soundRef.current?.stopAsync();
+      await soundRef.current?.stopAsync?.();
       setSpeaking(false);
       return;
     }
-
+    if (!IS_NATIVE) {
+      // Web: just show visual feedback, no audio
+      setSpeaking(true);
+      setTimeout(() => setSpeaking(false), 2500);
+      return;
+    }
     setVoiceLoading(true);
     try {
       const { audio_b64 } = await api.speakText(hint);
+      const FileSystem = require('expo-file-system');
+      const { Audio } = require('expo-av');
       const uri = FileSystem.cacheDirectory + 'focus_hint.mp3';
       await FileSystem.writeAsStringAsync(uri, audio_b64, { encoding: FileSystem.EncodingType.Base64 });
-
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
       const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
       soundRef.current = sound;
       setSpeaking(true);
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if ('didJustFinish' in status && status.didJustFinish) setSpeaking(false);
-      });
+      sound.setOnPlaybackStatusUpdate((s: any) => { if (s.didJustFinish) setSpeaking(false); });
     } catch (e) {
       console.error('voice error', e);
     } finally {
@@ -371,9 +392,7 @@ export default function FocusPathScreen() {
   }
 
   function switchMode(m: Mode) {
-    setMode(m);
-    setQuizSelected(null);
-    setRephrased(null);
+    setMode(m); setQuizSelected(null); setRephrased(null);
   }
 
   return (
@@ -395,18 +414,9 @@ export default function FocusPathScreen() {
       <Text style={styles.tagline}>Your adaptive learning companion</Text>
       <Text style={styles.taglineSub}>Attention tracking · Content AI · Voice guidance</Text>
 
-      {/* Real camera with face detection */}
-      <CameraFeed
-        level={focusLevel}
-        onFacesDetected={handleFaces}
-        permission={permission}
-        onRequestPermission={requestPermission}
-      />
-
-      {/* Animated attention meter */}
+      <CameraCard level={focusLevel} onFacesDetected={handleFaces} onDemoToggle={cycleDemoFocus} />
       <FocusMeter level={focusLevel} />
 
-      {/* AI adaptation banner */}
       {focusLevel !== 'high' && (
         <View style={[styles.adaptBanner, { borderColor: focusColor(focusLevel) }]}>
           <Text style={styles.adaptIcon}>🤖</Text>
@@ -418,24 +428,19 @@ export default function FocusPathScreen() {
         </View>
       )}
 
-      {/* Mode tabs */}
       <ModeSelector mode={mode} onChange={switchMode} />
 
-      {/* Content */}
       {mode === 'read' && <ReadContent onRephrase={handleRephrase} loading={rephraseLoading} rephrased={rephrased} />}
       {mode === 'watch' && <WatchContent />}
       {mode === 'quiz' && <QuizContent selected={quizSelected} onSelect={setQuizSelected} />}
 
-      {/* ElevenLabs voice */}
       <VoiceBar speaking={speaking} loading={voiceLoading} onToggle={handleVoiceToggle} />
 
-      {/* AI hint (Claude-generated) */}
       <View style={styles.hintCard}>
         <Text style={styles.hintLabel}>AI Hint</Text>
         {hintLoading ? <ActivityIndicator color={GOLD} /> : <Text style={styles.hintText}>{hint}</Text>}
       </View>
 
-      {/* Session progress */}
       <View style={styles.progressCard}>
         <Text style={styles.progressTitle}>Session Progress</Text>
         <View style={styles.progressRow}>
@@ -450,7 +455,6 @@ export default function FocusPathScreen() {
         </View>
       </View>
 
-      {/* Accommodations */}
       <View style={styles.accomCard}>
         <Text style={styles.accomTitle}>Active Accommodations</Text>
         <View style={styles.accomGrid}>
@@ -493,20 +497,24 @@ const styles = StyleSheet.create({
   tagline: { fontSize: 15, fontWeight: '600', color: Colors.textDark, marginBottom: 2 },
   taglineSub: { fontSize: 12, color: Colors.textMid, marginBottom: 20 },
 
-  // camera
   cameraCard: { backgroundColor: Colors.white, borderRadius: Radius.lg, padding: 16, marginBottom: 14, ...Shadow.sm },
-  cameraPermission: { alignItems: 'center', gap: 12, paddingVertical: 28 },
-  permissionText: { fontSize: 14, color: Colors.textMid, textAlign: 'center' },
-  permissionBtn: { backgroundColor: Colors.navy, borderRadius: Radius.md, paddingHorizontal: 20, paddingVertical: 10 },
-  permissionBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  cameraFrame: { height: 180, borderRadius: Radius.md, overflow: 'hidden', backgroundColor: '#1a2535', marginBottom: 12, position: 'relative' },
+  cameraFrame: {
+    height: 180, borderRadius: Radius.md, overflow: 'hidden',
+    backgroundColor: '#1a2535', marginBottom: 12, position: 'relative',
+    justifyContent: 'center', alignItems: 'center',
+  },
   cameraCornerTL: { position: 'absolute', top: 10, left: 10, width: 18, height: 18, borderTopWidth: 2, borderLeftWidth: 2, borderColor: GOLD },
   cameraCornerTR: { position: 'absolute', top: 10, right: 10, width: 18, height: 18, borderTopWidth: 2, borderRightWidth: 2, borderColor: GOLD },
   cameraCornerBL: { position: 'absolute', bottom: 10, left: 10, width: 18, height: 18, borderBottomWidth: 2, borderLeftWidth: 2, borderColor: GOLD },
   cameraCornerBR: { position: 'absolute', bottom: 10, right: 10, width: 18, height: 18, borderBottomWidth: 2, borderRightWidth: 2, borderColor: GOLD },
+  faceSilhouette: { alignItems: 'center' },
   gazeDot: { position: 'absolute', bottom: 28, right: 52, width: 10, height: 10, borderRadius: 5, opacity: 0.85 },
-  cameraInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  cameraInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
   cameraSubText: { fontSize: 11, color: Colors.textLight },
+  permissionBtn: { backgroundColor: Colors.navy, borderRadius: Radius.md, paddingHorizontal: 20, paddingVertical: 10 },
+  permissionBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  debugBtn: { alignSelf: 'center', marginTop: 4 },
+  debugBtnText: { fontSize: 11, color: Colors.textLight, textDecorationLine: 'underline' },
 
   attentionBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 4 },
   attentionDot: { width: 8, height: 8, borderRadius: 4 },
@@ -538,7 +546,7 @@ const styles = StyleSheet.create({
 
   videoThumb: { height: 130, backgroundColor: '#1a2535', borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center', marginBottom: 12, gap: 8 },
   videoCaption: { fontSize: 12, color: '#aab8c8' },
-  videoChips: { flexDirection: 'row', gap: 8 },
+  videoChips: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   chip: { backgroundColor: Colors.sageLight, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 4 },
   chipText: { fontSize: 11, color: '#3a7a5a', fontWeight: '600' },
 

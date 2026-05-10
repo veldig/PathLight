@@ -48,9 +48,13 @@ export default function FundFinderScreen() {
     setError(null);
     try {
       const result = await api.searchFunding() as any;
+      if (!result.financial_plan) {
+        throw new Error('No financial_plan in response: ' + JSON.stringify(result));
+      }
       setPlan(result.financial_plan);
-    } catch {
-      setError('Could not load funding. Please try again.');
+    } catch (e: any) {
+      console.error('[FundFinder] fetchFunding error:', e?.message ?? e);
+      setError(`Could not load funding: ${e?.message ?? 'Unknown error'}`);
     } finally {
       setLoading(false);
     }

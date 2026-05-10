@@ -1,10 +1,8 @@
 import { Colors, Radius, Shadow } from '@/constants/theme';
-import { UserProfile } from '@/lib/api';
-import { supabase } from '@/lib/supabase';
+import { UserProfile, api } from '@/lib/api';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,6 +21,7 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState<Partial<UserProfile>>({});
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   function update(key: keyof UserProfile, value: string | number | boolean) {
@@ -32,17 +31,13 @@ export default function OnboardingScreen() {
   async function finish() {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not signed in');
-      const { error } = await supabase
-        .from('profiles')
-        .upsert({ id: user.id, ...profile });
-      if (error) throw error;
+      await api.updateProfile(profile);
       router.replace('/(tabs)');
     } catch (e: any) {
-      Alert.alert('Error saving profile', e.message);
+      setError(e.message ?? 'Could not save profile. Try again.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   const isLast = step === STEPS.length - 1;
@@ -87,6 +82,9 @@ export default function OnboardingScreen() {
         )}
       </View>
 
+      {error && (
+        <Text style={{ color: Colors.terracotta, textAlign: 'center', marginBottom: 12, fontSize: 13 }}>{error}</Text>
+      )}
       <View style={styles.btnRow}>
         {step > 0 && (
           <TouchableOpacity style={styles.backBtn} onPress={() => setStep(step - 1)}>

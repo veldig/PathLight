@@ -1,18 +1,20 @@
 import os
 import json
-import asyncio
-from fastapi import APIRouter, Depends
+import logging
+from fastapi import APIRouter, Depends, HTTPException
 from anthropic import Anthropic
 from middleware.auth import get_current_user_id
 from lib.mongo_client import get_mongo
 from ml.matcher import match_scholarships, table_is_empty
 from models.schema import AutoApplyPreviewRequest, AutoApplySubmitRequest
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
 
-def build_prompt(profile: dict, real_scholarships: list[dict]) -> str:
+def build_prompt(profile: dict, real_scholarships: list) -> str:
     real_data_section = ""
     if real_scholarships:
         lines = "\n".join(
@@ -113,7 +115,6 @@ def search(user_id: str = Depends(get_current_user_id)):
         fundfinder_scraper.run()
 
     real_scholarships = match_scholarships(profile, limit=6)
-
     prompt = build_prompt(profile, real_scholarships)
 
     response = client.messages.create(
@@ -131,8 +132,8 @@ def search(user_id: str = Depends(get_current_user_id)):
 
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError:
-        data = {"error": "Failed to parse response", "raw": raw}
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse AI response: {e}")
 
     return {"financial_plan": data}
 
@@ -142,7 +143,6 @@ async def auto_apply_preview(
     body: AutoApplyPreviewRequest,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Fill the scholarship/grant application form using the user's profile. Returns preview for review."""
     db = get_mongo()
     profile = db["profiles"].find_one({"_id": user_id}) or {}
     if profile:
@@ -156,7 +156,6 @@ async def auto_apply_submit(
     body: AutoApplySubmitRequest,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Re-fill and submit the application with the user-confirmed field values."""
     db = get_mongo()
     profile = db["profiles"].find_one({"_id": user_id}) or {}
     if profile:

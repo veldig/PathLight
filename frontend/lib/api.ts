@@ -1,4 +1,5 @@
 import { getAccessToken } from './profileService';
+import { clearAuthData } from './supabase';
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
 
@@ -12,6 +13,13 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     },
     ...options,
   });
+  if (res.status === 401) {
+    // Token is invalid or expired — clear stored credentials and force re-login
+    await clearAuthData();
+    const { useAuthStore } = await import('@/store/authStore');
+    useAuthStore.getState().clearAuth();
+    throw new Error('Session expired. Please sign in again.');
+  }
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
   return res.json();
 }

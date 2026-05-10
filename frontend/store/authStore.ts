@@ -1,6 +1,16 @@
 import { create } from 'zustand';
 import { getStoredToken, getStoredUser, clearAuthData } from '@/lib/supabase';
 
+function isHS256Token(token: string): boolean {
+  try {
+    const headerB64 = token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+    const header = JSON.parse(atob(headerB64));
+    return header.alg === 'HS256';
+  } catch {
+    return false;
+  }
+}
+
 interface AuthUser {
   id: string;
   email: string;
@@ -30,9 +40,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   loadFromStorage: async () => {
     try {
       const [token, user] = await Promise.all([getStoredToken(), getStoredUser()]);
-      // HS256 header = base64url({"alg":"HS256","typ":"JWT"}) = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
-      // Old Supabase tokens use RS256 and have a different header — clear them to force re-login
-      if (token && !token.startsWith('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9')) {
+      if (token && !isHS256Token(token)) {
+        // Old Supabase tokens use RS256 — backend rejects them. Clear and force re-login.
         await clearAuthData();
         set({ token: null, user: null, loaded: true });
         return;

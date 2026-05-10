@@ -5,19 +5,28 @@ import os
 import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from routers import auth, profile, fundfinder, careerboost, wellness, chat, calendar, therapists, focuspath
 
 app = FastAPI(title="PathLight API", version="1.0.0")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Key",
+}
+
+
+@app.middleware("http")
+async def cors_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return Response(status_code=200, headers=CORS_HEADERS)
+    response = await call_next(request)
+    for k, v in CORS_HEADERS.items():
+        response.headers[k] = v
+    return response
+
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(profile.router, prefix="/profile", tags=["profile"])
@@ -48,7 +57,6 @@ def health():
 
 @app.post("/admin/scrape")
 def admin_scrape(x_admin_key: str = Header(None)):
-    """Seed all ML tables with scraped + curated data. Requires X-Admin-Key header."""
     expected = os.environ.get("ADMIN_KEY", "")
     if not expected or x_admin_key != expected:
         raise HTTPException(status_code=403, detail="Forbidden")

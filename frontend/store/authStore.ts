@@ -1,16 +1,38 @@
-import { Session, User } from '@supabase/supabase-js';
 import { create } from 'zustand';
+import { getStoredToken, getStoredUser, clearAuthData } from '@/lib/supabase';
+
+interface AuthUser {
+  id: string;
+  email: string;
+}
 
 interface AuthState {
-  session: Session | null;
-  user: User | null;
-  loaded: boolean; // true once Supabase has resolved the initial session
-  setSession: (session: Session | null) => void;
+  token: string | null;
+  user: AuthUser | null;
+  loaded: boolean;
+  setAuth: (token: string, user: AuthUser) => void;
+  clearAuth: () => Promise<void>;
+  loadFromStorage: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-  session: null,
+  token: null,
   user: null,
   loaded: false,
-  setSession: (session) => set({ session, user: session?.user ?? null, loaded: true }),
+
+  setAuth: (token, user) => set({ token, user, loaded: true }),
+
+  clearAuth: async () => {
+    await clearAuthData();
+    set({ token: null, user: null, loaded: true });
+  },
+
+  loadFromStorage: async () => {
+    try {
+      const [token, user] = await Promise.all([getStoredToken(), getStoredUser()]);
+      set({ token, user, loaded: true });
+    } catch {
+      set({ loaded: true });
+    }
+  },
 }));

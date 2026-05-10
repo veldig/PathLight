@@ -1,5 +1,6 @@
 import { Colors, Radius, Shadow } from '@/constants/theme';
-import { supabase } from '@/lib/supabase';
+import { saveAuthData } from '@/lib/supabase';
+import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -13,6 +14,8 @@ import {
   View,
 } from 'react-native';
 
+const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
+
 export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -22,21 +25,24 @@ export default function RegisterScreen() {
 
   async function signUp() {
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name } },
-    });
-    setLoading(false);
-    if (error) {
-      console.error('[signUp] error:', error.message);
-      Alert.alert('Sign up failed', error.message);
-    } else if (!data.session) {
-      console.warn('[signUp] no session — email confirmation required');
-      Alert.alert('Check your email', 'We sent you a confirmation link. Click it to activate your account, then sign in.');
-    } else {
-      console.log('[signUp] success, navigating to onboarding');
+    try {
+      const res = await fetch(`${API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, name }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        Alert.alert('Sign up failed', data.detail ?? 'Unknown error');
+        return;
+      }
+      await saveAuthData(data.token, { id: data.user_id, email: data.email });
+      useAuthStore.getState().setAuth(data.token, { id: data.user_id, email: data.email });
       router.replace('/(auth)/onboarding');
+    } catch (e: any) {
+      Alert.alert('Sign up failed', e.message);
+    } finally {
+      setLoading(false);
     }
   }
 

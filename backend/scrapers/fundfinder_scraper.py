@@ -1,10 +1,10 @@
 """
 FundFinder scraper: curated single-parent grants/scholarships + live Grants.gov API data.
-Embeds and upserts into the Supabase `scholarships` table.
+Embeds and upserts into the MongoDB `scholarships` collection.
 """
 import uuid
 import httpx
-from lib.supabase_client import get_supabase
+from lib.mongo_client import get_mongo
 from ml.embeddings import embed_batch
 
 CURATED = [
@@ -129,10 +129,9 @@ def _embed_text(s: dict) -> str:
 
 
 def run(force: bool = False) -> int:
-    sb = get_supabase()
+    db = get_mongo()
     if not force:
-        existing = sb.table("scholarships").select("id", count="exact").execute()
-        if (existing.count or 0) >= 5:
+        if db["scholarships"].count_documents({}) >= 5:
             return 0
 
     all_items = CURATED.copy()
@@ -143,7 +142,6 @@ def run(force: bool = False) -> int:
 
     rows = [
         {
-            "id": str(uuid.uuid4()),
             "name": s["name"],
             "source": s.get("source", ""),
             "amount": s.get("amount", 0),
@@ -156,7 +154,12 @@ def run(force: bool = False) -> int:
         for i, s in enumerate(all_items)
     ]
 
-    sb.table("scholarships").upsert(rows).execute()
+    for row in rows:
+        db["scholarships"].update_one(
+            {"name": row["name"]},
+            {"$set": row},
+            upsert=True,
+        )
     return len(rows)
 
 

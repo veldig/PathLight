@@ -2,7 +2,7 @@ import os
 from fastapi import APIRouter, Depends
 from anthropic import Anthropic
 from middleware.auth import get_current_user_id
-from lib.supabase_client import get_supabase
+from lib.mongo_client import get_mongo
 from models.schema import ConfirmAction, AutoApplyPreviewRequest, AutoApplySubmitRequest
 from ml.matcher import match_jobs, table_is_empty
 
@@ -12,8 +12,10 @@ client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
 @router.post("/search")
 def search(user_id: str = Depends(get_current_user_id)):
-    sb = get_supabase()
-    profile = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute().data or {}
+    db = get_mongo()
+    profile = db["profiles"].find_one({"_id": user_id}) or {}
+    if profile:
+        profile["id"] = profile.pop("_id", user_id)
 
     if table_is_empty("jobs"):
         from scrapers import careerboost_scraper
@@ -78,8 +80,10 @@ async def auto_apply_preview(
     user_id: str = Depends(get_current_user_id),
 ):
     """Fill a job application form using the user's profile. Returns preview for review."""
-    sb = get_supabase()
-    profile = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute().data or {}
+    db = get_mongo()
+    profile = db["profiles"].find_one({"_id": user_id}) or {}
+    if profile:
+        profile["id"] = profile.pop("_id", user_id)
     from agents.form_agent import preview
     return await preview(body.url, profile)
 
@@ -90,7 +94,9 @@ async def auto_apply_submit(
     user_id: str = Depends(get_current_user_id),
 ):
     """Re-fill and submit the job application with user-confirmed field values."""
-    sb = get_supabase()
-    profile = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute().data or {}
+    db = get_mongo()
+    profile = db["profiles"].find_one({"_id": user_id}) or {}
+    if profile:
+        profile["id"] = profile.pop("_id", user_id)
     from agents.form_agent import confirm_and_submit
     return await confirm_and_submit(body.url, profile, body.filled_values)

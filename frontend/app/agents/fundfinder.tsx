@@ -2,144 +2,225 @@ import { Colors, Radius, Shadow } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
-interface Opportunity {
-  id: string;
-  name: string;
-  source: string;
-  amount: number;
-  deadline: string;
-  match_score: number;
-  description: string;
-  requirements: string[];
-  status: string;
-}
+const ACCENT = '#C08A3A';
+const ACCENT_BG = '#fdf3e3';
 
 export default function FundFinderScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
-  const [error, setError] = useState('');
-  const [applying, setApplying] = useState<string | null>(null);
+  const [plan, setPlan] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  async function search() {
+  const fetchFunding = async () => {
     setLoading(true);
-    setError('');
+    setError(null);
     try {
-      const result = await api.searchFunding();
-      const raw = (result as any).opportunities;
-      const parsed = typeof raw === 'string'
-        ? JSON.parse(raw.replace(/```json|```/g, '').trim())
-        : raw;
-      setOpportunities(Array.isArray(parsed) ? parsed : []);
+      const result = await api.searchFunding() as any;
+      setPlan(result.financial_plan);
     } catch (e: any) {
-      setError(e.message);
+      setError('Could not load funding. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }
-
-  async function apply(opp: Opportunity) {
-    const confirmed = window?.confirm
-      ? window.confirm(`Apply to "${opp.name}"?`)
-      : await new Promise<boolean>((resolve) =>
-          Alert.alert('Confirm Application', `Apply to ${opp.name}?`, [
-            { text: 'Cancel', onPress: () => resolve(false) },
-            { text: 'Apply', onPress: () => resolve(true) },
-          ])
-        );
-    if (!confirmed) return;
-    setApplying(opp.id);
-    try {
-      await api.confirmFundingApplication(opp.id);
-      setOpportunities((prev) => prev.map((o) => o.id === opp.id ? { ...o, status: 'submitted' } : o));
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    }
-    setApplying(null);
-  }
+  };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Back</Text>
+    <View style={{ flex: 1, backgroundColor: Colors.background }}>
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: Colors.navy }]}>
+        <TouchableOpacity onPress={() => router.back()} style={{ marginBottom: 16 }}>
+          <Text style={{ color: Colors.sage, fontSize: 16, fontWeight: '600' }}>‹ Back</Text>
         </TouchableOpacity>
-        <View style={styles.headerIcon}><Text style={{ fontSize: 22 }}>💰</Text></View>
-        <Text style={styles.headerTitle}>FundFinder Agent</Text>
-        <Text style={styles.headerSub}>Grants, scholarships & aid you qualify for</Text>
+        <View style={{ alignItems: 'center' }}>
+          <View style={[styles.iconWrap, { backgroundColor: Colors.terraLight }]}>
+            <Text style={{ fontSize: 28 }}>💰</Text>
+          </View>
+          <Text style={styles.headerTitle}>FundFinder Agent</Text>
+          <Text style={styles.headerSub}>Grants, scholarships & aid</Text>
+        </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {opportunities.length === 0 && !loading && (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>Find funding for you</Text>
-            <Text style={styles.emptySub}>FundFinder scans thousands of grants, scholarships, and government programs based on your profile.</Text>
-            <TouchableOpacity style={styles.actionBtn} onPress={search}>
-              <Text style={styles.actionBtnText}>Search Funding Opportunities</Text>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+        {/* Find Button */}
+        {!plan && !loading && (
+          <View style={[styles.card, { alignItems: 'center', paddingVertical: 32 }]}>
+            <Text style={{ fontSize: 32, marginBottom: 12 }}>🔍</Text>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.textDark, marginBottom: 6 }}>
+              Find Your Funding
+            </Text>
+            <Text style={{ fontSize: 13, color: Colors.textMid, textAlign: 'center', marginBottom: 20 }}>
+              We'll find scholarships, grants, jobs, and childcare aid personalized for you.
+            </Text>
+            <TouchableOpacity style={[styles.btn, { backgroundColor: ACCENT }]} onPress={fetchFunding}>
+              <Text style={{ color: Colors.white, fontWeight: '700', fontSize: 15 }}>Find My Funding →</Text>
             </TouchableOpacity>
           </View>
         )}
 
+        {/* Loading */}
         {loading && (
-          <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color={Colors.terracotta} />
-            <Text style={styles.loadingText}>Scanning funding sources for you…</Text>
+          <View style={[styles.card, { alignItems: 'center', paddingVertical: 40 }]}>
+            <ActivityIndicator size="large" color={ACCENT} />
+            <Text style={{ marginTop: 16, color: Colors.textMid, fontSize: 14 }}>
+              Finding your personalized funding...
+            </Text>
           </View>
         )}
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {/* Error */}
+        {error && (
+          <View style={[styles.card, { alignItems: 'center' }]}>
+            <Text style={{ color: Colors.terracotta, fontSize: 14 }}>{error}</Text>
+            <TouchableOpacity style={[styles.btn, { backgroundColor: ACCENT, marginTop: 12 }]} onPress={fetchFunding}>
+              <Text style={{ color: Colors.white, fontWeight: '700' }}>Try Again</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-        {opportunities.map((opp) => (
-          <View key={opp.id} style={styles.card}>
-            <View style={styles.cardTop}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.oppName}>{opp.name}</Text>
-                <Text style={styles.oppSource}>{opp.source}</Text>
+        {/* Results */}
+        {plan && (
+          <>
+            {/* Summary */}
+            <View style={styles.card}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={styles.cardTitle}>Your Situation</Text>
+                <View style={[styles.badge, { backgroundColor: plan.urgency === 'HIGH' ? '#fde8e8' : ACCENT_BG }]}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: plan.urgency === 'HIGH' ? '#c0392b' : ACCENT }}>
+                    {plan.urgency} PRIORITY
+                  </Text>
+                </View>
               </View>
-              <View style={styles.matchBadge}>
-                <Text style={styles.matchText}>{Math.round(opp.match_score * 100)}% match</Text>
-              </View>
+              <Text style={{ fontSize: 13, color: Colors.textMid, lineHeight: 20 }}>{plan.summary}</Text>
             </View>
 
-            <Text style={styles.amount}>${opp.amount.toLocaleString()}</Text>
-            <Text style={styles.deadline}>Deadline: {opp.deadline}</Text>
-            <Text style={styles.description}>{opp.description}</Text>
+            {/* Budget Breakdown */}
+            {plan.monthly_budget_breakdown && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Monthly Budget Breakdown</Text>
+                <View style={styles.budgetRow}>
+                  <Text style={styles.budgetLabel}>Income Potential</Text>
+                  <Text style={[styles.budgetValue, { color: '#27ae60' }]}>{plan.monthly_budget_breakdown.income_potential}</Text>
+                </View>
+                <View style={styles.budgetRow}>
+                  <Text style={styles.budgetLabel}>Aid Potential</Text>
+                  <Text style={[styles.budgetValue, { color: ACCENT }]}>{plan.monthly_budget_breakdown.aid_potential}</Text>
+                </View>
+                <View style={[styles.budgetRow, { borderBottomWidth: 0 }]}>
+                  <Text style={styles.budgetLabel}>Gap</Text>
+                  <Text style={[styles.budgetValue, { color: Colors.textDark }]}>{plan.monthly_budget_breakdown.gap}</Text>
+                </View>
+                <Text style={{ fontSize: 12, color: Colors.textMid, marginTop: 8 }}>{plan.monthly_budget_breakdown.note}</Text>
+              </View>
+            )}
 
-            {opp.requirements?.length > 0 && (
-              <View style={styles.reqSection}>
-                <Text style={styles.reqTitle}>Requirements</Text>
-                {opp.requirements.map((r, i) => (
-                  <View key={i} style={styles.listRow}>
-                    <View style={styles.bullet} />
-                    <Text style={styles.listText}>{r}</Text>
+            {/* Next Steps */}
+            {plan.immediate_next_steps?.length > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>⚡ Immediate Next Steps</Text>
+                {plan.immediate_next_steps.map((step: string, i: number) => (
+                  <View key={i} style={styles.stepRow}>
+                    <View style={[styles.stepNum, { backgroundColor: ACCENT_BG }]}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: ACCENT }}>{i + 1}</Text>
+                    </View>
+                    <Text style={{ flex: 1, fontSize: 13, color: Colors.textMid, lineHeight: 18 }}>{step}</Text>
                   </View>
                 ))}
               </View>
             )}
 
-            {opp.status === 'submitted' ? (
-              <View style={styles.submittedBadge}>
-                <Text style={styles.submittedText}>✓ Application Submitted</Text>
+            {/* Scholarships */}
+            {plan.scholarships?.length > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>🎓 Scholarships</Text>
+                {plan.scholarships.map((s: any, i: number) => (
+                  <View key={i} style={[styles.itemRow, i === plan.scholarships.length - 1 && { borderBottomWidth: 0 }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textDark, flex: 1 }}>{s.name}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: ACCENT }}>{s.amount}</Text>
+                    </View>
+                    <Text style={styles.itemMeta}>📅 {s.deadline}</Text>
+                    <Text style={styles.itemDesc}>{s.why_they_qualify}</Text>
+                  </View>
+                ))}
               </View>
-            ) : (
-              <TouchableOpacity
-                style={[styles.applyBtn, applying === opp.id && { opacity: 0.6 }]}
-                onPress={() => apply(opp)}
-                disabled={applying === opp.id}
-              >
-                {applying === opp.id
-                  ? <ActivityIndicator color={Colors.white} size="small" />
-                  : <Text style={styles.applyBtnText}>Apply Now →</Text>}
-              </TouchableOpacity>
             )}
-          </View>
-        ))}
 
-        {opportunities.length > 0 && (
-          <TouchableOpacity style={styles.refreshBtn} onPress={search}>
-            <Text style={styles.refreshText}>↻ Search Again</Text>
-          </TouchableOpacity>
+            {/* Grants */}
+            {plan.grants?.length > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>💵 Grants</Text>
+                {plan.grants.map((g: any, i: number) => (
+                  <View key={i} style={[styles.itemRow, i === plan.grants.length - 1 && { borderBottomWidth: 0 }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textDark, flex: 1 }}>{g.name}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: ACCENT }}>{g.amount}</Text>
+                    </View>
+                    <Text style={styles.itemDesc}>{g.why_they_qualify}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Jobs */}
+            {plan.jobs?.length > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>💼 Jobs That Fit Your Schedule</Text>
+                {plan.jobs.map((j: any, i: number) => (
+                  <View key={i} style={[styles.itemRow, i === plan.jobs.length - 1 && { borderBottomWidth: 0 }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textDark, flex: 1 }}>{j.title}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: ACCENT }}>{j.pay}</Text>
+                    </View>
+                    <Text style={styles.itemMeta}>⏰ {j.hours}</Text>
+                    <Text style={styles.itemDesc}>{j.why_it_fits}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Childcare */}
+            {plan.childcare_assistance?.length > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>👶 Childcare Assistance</Text>
+                {plan.childcare_assistance.map((c: any, i: number) => (
+                  <View key={i} style={[styles.itemRow, i === plan.childcare_assistance.length - 1 && { borderBottomWidth: 0 }]}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textDark, marginBottom: 4 }}>{c.program}</Text>
+                    <Text style={styles.itemDesc}>{c.benefit}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Emergency Aid */}
+            {plan.emergency_aid?.length > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>🚨 Emergency Aid</Text>
+                {plan.emergency_aid.map((e: any, i: number) => (
+                  <View key={i} style={[styles.itemRow, i === plan.emergency_aid.length - 1 && { borderBottomWidth: 0 }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textDark, flex: 1 }}>{e.source}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.terracotta }}>{e.amount}</Text>
+                    </View>
+                    <Text style={styles.itemDesc}>{e.when_to_use}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Refresh */}
+            <TouchableOpacity style={[styles.btn, { backgroundColor: ACCENT, alignSelf: 'center' }]} onPress={fetchFunding}>
+              <Text style={{ color: Colors.white, fontWeight: '700' }}>Refresh Results</Text>
+            </TouchableOpacity>
+          </>
         )}
       </ScrollView>
     </View>
@@ -147,40 +228,20 @@ export default function FundFinderScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { backgroundColor: Colors.terracotta, padding: 24, paddingTop: 56, alignItems: 'center' },
-  backBtn: { position: 'absolute', top: 56, left: 16 },
-  backText: { color: Colors.white, fontWeight: '600', fontSize: 14 },
-  headerIcon: { width: 56, height: 56, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  headerTitle: { fontSize: 22, fontWeight: '700', color: Colors.white, marginBottom: 4 },
-  headerSub: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
-  content: { padding: 16, paddingBottom: 48 },
-  emptyCard: { backgroundColor: Colors.white, borderRadius: Radius.xl, padding: 28, ...Shadow.sm, alignItems: 'center', marginTop: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: Colors.textDark, marginBottom: 10 },
-  emptySub: { fontSize: 13.5, color: Colors.textMid, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
-  actionBtn: { backgroundColor: Colors.terracotta, borderRadius: Radius.md, paddingVertical: 14, paddingHorizontal: 28 },
-  actionBtnText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
-  loadingCard: { alignItems: 'center', padding: 48, gap: 16 },
-  loadingText: { color: Colors.textMid, fontSize: 14 },
-  errorText: { color: Colors.terracotta, textAlign: 'center', marginTop: 16 },
+  header: { paddingTop: 56, paddingBottom: 28, paddingHorizontal: 20 },
+  iconWrap: { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  headerTitle: { fontSize: 22, fontWeight: '700', color: '#fff', marginBottom: 4 },
+  headerSub: { fontSize: 13, color: Colors.textLight },
   card: { backgroundColor: Colors.white, borderRadius: Radius.lg, padding: 18, ...Shadow.sm, marginBottom: 14 },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
-  oppName: { fontSize: 15, fontWeight: '700', color: Colors.textDark, marginBottom: 2 },
-  oppSource: { fontSize: 12, color: Colors.textMid },
-  matchBadge: { backgroundColor: Colors.terraLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.full },
-  matchText: { fontSize: 11, fontWeight: '700', color: Colors.terracotta },
-  amount: { fontSize: 24, fontWeight: '700', color: Colors.terracotta, marginBottom: 4 },
-  deadline: { fontSize: 12, color: Colors.textMid, marginBottom: 10 },
-  description: { fontSize: 13, color: Colors.textDark, lineHeight: 19, marginBottom: 12 },
-  reqSection: { marginBottom: 14 },
-  reqTitle: { fontSize: 11, fontWeight: '700', color: Colors.textLight, textTransform: 'uppercase', marginBottom: 8 },
-  listRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
-  bullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.terracotta, marginTop: 6 },
-  listText: { flex: 1, fontSize: 13, color: Colors.textDark },
-  applyBtn: { backgroundColor: Colors.terracotta, borderRadius: Radius.md, padding: 13, alignItems: 'center' },
-  applyBtnText: { color: Colors.white, fontWeight: '700', fontSize: 14 },
-  submittedBadge: { backgroundColor: Colors.sageLight, borderRadius: Radius.md, padding: 12, alignItems: 'center' },
-  submittedText: { color: '#3a7a50', fontWeight: '700', fontSize: 14 },
-  refreshBtn: { alignItems: 'center', padding: 14 },
-  refreshText: { color: Colors.terracotta, fontWeight: '600', fontSize: 14 },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: Colors.textDark, marginBottom: 12 },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.full },
+  btn: { paddingVertical: 14, paddingHorizontal: 28, borderRadius: Radius.md },
+  budgetRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  budgetLabel: { fontSize: 13, color: Colors.textMid },
+  budgetValue: { fontSize: 13, fontWeight: '700' },
+  stepRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 8 },
+  stepNum: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  itemRow: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  itemMeta: { fontSize: 11, color: Colors.textLight, marginBottom: 4 },
+  itemDesc: { fontSize: 12, color: Colors.textMid, lineHeight: 17 },
 });

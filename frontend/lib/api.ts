@@ -55,6 +55,16 @@ export const api = {
   // WellnessGuide
   startCheckin: () => request('/agents/wellness/checkin', { method: 'POST' }),
   getWellnessHistory: () => request('/agents/wellness/history'),
+  wellnessChat: (message: string, history: Array<{ role: string; content: string }>) =>
+    request<{ reply: string }>('/agents/wellness/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message, history }),
+    }),
+  wellnessSpeak: (text: string) =>
+    request<{ audio_b64: string | null; error: string | null }>('/agents/wellness/speak', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
 
   // Therapist Listings
   getTherapists: (params?: { specialty?: string; max_price?: number; insurance_only?: boolean }) => {

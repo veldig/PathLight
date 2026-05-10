@@ -3,7 +3,7 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-_bearer = HTTPBearer()
+_bearer = HTTPBearer(auto_error=False)
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "changeme-set-in-prod")
 
@@ -11,6 +11,8 @@ JWT_SECRET = os.environ.get("JWT_SECRET", "changeme-set-in-prod")
 def get_current_user_id(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 ) -> str:
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     token = credentials.credentials
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])

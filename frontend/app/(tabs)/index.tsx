@@ -110,6 +110,23 @@ export default function HomeScreen() {
           ))}
         </View>
 
+        {/* Scholarship Banner */}
+        <TouchableOpacity
+          style={{ backgroundColor: '#1a0533', borderRadius: 18, padding: 18, marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}
+          onPress={() => router.push('/agents/scholarship' as any)}
+        >
+          <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: '#f3eeff', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 22 }}>🎓</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#14F195', marginBottom: 2 }}>PathLight Scholarship</Text>
+            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', lineHeight: 16 }}>
+              Community-funded aid for student mothers · Donate or apply
+            </Text>
+          </View>
+          <Text style={{ fontSize: 20, color: '#9945FF' }}>›</Text>
+        </TouchableOpacity>
+
         {/* This week */}
         <View style={styles.card}>
           <View style={styles.cardTitleRow}>

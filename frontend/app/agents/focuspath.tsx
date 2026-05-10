@@ -33,7 +33,7 @@ const TOPIC = 'Biology · Chapter 4: The Cell';
 
 const READ_TEXT =
   'The mitochondria is often called the powerhouse of the cell. ' +
-  'It generates most of the cell's supply of adenosine triphosphate (ATP), ' +
+  "It generates most of the cell's supply of adenosine triphosphate (ATP), " +
   'used as a source of chemical energy. Mitochondria are found in nearly all eukaryotic cells.';
 
 const QUIZ_OPTIONS = [
@@ -295,7 +295,7 @@ export default function FocusPathScreen() {
   const [rephrased, setRephrased] = useState<string | null>(null);
   const [rephraseLoading, setRephraseLoading] = useState(false);
 
-  const [hint, setHint] = useState('You're doing great — keep going! 🌟');
+  const [hint, setHint] = useState("You're doing great — keep going! 🌟");
   const [hintLoading, setHintLoading] = useState(false);
 
   const [speaking, setSpeaking] = useState(false);

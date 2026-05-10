@@ -1,5 +1,6 @@
 import { Colors, Radius, Shadow } from '@/constants/theme';
-import { supabase } from '@/lib/supabase';
+import { saveAuth } from '@/lib/auth';
+import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -12,48 +13,47 @@ import {
   View,
 } from 'react-native';
 
+const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
+
 export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
+  const { setAuth } = useAuthStore();
   const router = useRouter();
 
   async function signUp() {
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      setError('Please fill in all fields.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
     setLoading(true);
     setError('');
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name } },
-    });
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-    } else if (!data.session) {
-      setSuccess(true);
-    } else {
+    try {
+      const res = await fetch(`${API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.detail ?? 'Registration failed. Please try again.');
+        return;
+      }
+      await saveAuth(data.token, { userId: data.user_id, email: data.email });
+      setAuth(data.token, data.user_id, data.email);
       router.replace('/(auth)/onboarding');
+    } catch {
+      setError('Unable to connect. Check your internet connection.');
+    } finally {
+      setLoading(false);
     }
-  }
-
-  if (success) {
-    return (
-      <View style={[styles.container, { alignItems: 'center' }]}>
-        <View style={styles.card}>
-          <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>📬</Text>
-          <Text style={[styles.title, { textAlign: 'center' }]}>Check your email</Text>
-          <Text style={[styles.sub, { textAlign: 'center' }]}>
-            We sent a confirmation link to <Text style={{ fontWeight: '700' }}>{email}</Text>. Click it to activate your account, then sign in.
-          </Text>
-          <TouchableOpacity style={styles.btn} onPress={() => router.replace('/(auth)/login')}>
-            <Text style={styles.btnText}>Go to Sign In</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
   }
 
   return (

@@ -1,5 +1,6 @@
 import { Colors, Radius, Shadow } from '@/constants/theme';
-import { supabase } from '@/lib/supabase';
+import { saveAuth } from '@/lib/auth';
+import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -12,22 +13,41 @@ import {
   View,
 } from 'react-native';
 
+const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
+
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { setAuth } = useAuthStore();
   const router = useRouter();
 
   async function signIn() {
+    if (!email.trim() || !password.trim()) {
+      setError('Please enter your email and password.');
+      return;
+    }
     setLoading(true);
     setError('');
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-    } else if (data.session) {
+    try {
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.detail ?? 'Login failed. Please try again.');
+        return;
+      }
+      await saveAuth(data.token, { userId: data.user_id, email: data.email });
+      setAuth(data.token, data.user_id, data.email);
       router.replace('/(tabs)');
+    } catch {
+      setError('Unable to connect. Check your internet connection.');
+    } finally {
+      setLoading(false);
     }
   }
 

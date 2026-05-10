@@ -1,5 +1,5 @@
 import { getAccessToken } from './profileService';
-import { supabase } from './supabase';
+import { clearAuth } from './auth';
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
 
@@ -14,9 +14,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
   });
   if (res.status === 401) {
-    await supabase.auth.signOut();
+    await clearAuth();
     const { useAuthStore } = await import('@/store/authStore');
-    useAuthStore.getState().setSession(null);
+    useAuthStore.getState().clearAuth();
     throw new Error('Session expired. Please sign in again.');
   }
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);

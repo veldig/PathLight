@@ -7,7 +7,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import profile, fundfinder, careerboost, wellness, chat, calendar, therapists, focuspath
+from routers import auth, profile, fundfinder, careerboost, wellness, chat, calendar, therapists, focuspath
 
 app = FastAPI(title="PathLight API", version="1.0.0")
 
@@ -19,6 +19,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(profile.router, prefix="/profile", tags=["profile"])
 app.include_router(fundfinder.router, prefix="/agents/fundfinder", tags=["fundfinder"])
 app.include_router(careerboost.router, prefix="/agents/careerboost", tags=["careerboost"])

@@ -1,12 +1,13 @@
 import base64
 import os
-from datetime import date
+import uuid
+from datetime import date, datetime
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 import httpx
 from anthropic import Anthropic
 from middleware.auth import get_current_user_id
-from lib.supabase_client import get_supabase
+from lib.mongo_client import get_mongo
 from ml.matcher import match_wellness_resources, table_is_empty
 
 router = APIRouter()
@@ -46,11 +47,11 @@ class SpeakRequest(BaseModel):
 
 @router.post("/checkin")
 def start_checkin(user_id: str = Depends(get_current_user_id)):
-    sb = get_supabase()
+    db = get_mongo()
 
-    streak_data = sb.table("wellness_streaks").select("*").eq("user_id", user_id).maybe_single().execute().data or {}
-    last_checkin = streak_data.get("last_checkin")
-    current_streak = streak_data.get("current_streak", 0)
+    streak_doc = db["wellness_streaks"].find_one({"_id": user_id}) or {}
+    last_checkin = streak_doc.get("last_checkin")
+    current_streak = streak_doc.get("current_streak", 0)
 
     today = date.today().isoformat()
     if last_checkin == today:
@@ -60,16 +61,17 @@ def start_checkin(user_id: str = Depends(get_current_user_id)):
     else:
         new_streak = 1
 
-    sb.table("wellness_streaks").upsert(
-        {"user_id": user_id, "current_streak": new_streak, "last_checkin": today},
-        on_conflict="user_id",
-    ).execute()
+    db["wellness_streaks"].update_one(
+        {"_id": user_id},
+        {"$set": {"current_streak": new_streak, "last_checkin": today}},
+        upsert=True,
+    )
 
     if table_is_empty("wellness_resources"):
         from scrapers import wellness_scraper
         wellness_scraper.run()
 
-    profile = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute().data or {}
+    profile = db["profiles"].find_one({"_id": user_id}) or {}
     matched_resources = match_wellness_resources(profile, limit=3)
 
     resource_context = ""
@@ -99,6 +101,14 @@ def start_checkin(user_id: str = Depends(get_current_user_id)):
             ),
         }],
     )
+
+    db["wellness_checkins"].insert_one({
+        "_id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "message": response.content[0].text,
+        "created_at": datetime.utcnow().isoformat(),
+    })
+
     return {"message": response.content[0].text, "streak": new_streak, "resources": matched_resources}
 
 
@@ -137,10 +147,18 @@ async def speak(body: SpeakRequest, user_id: str = Depends(get_current_user_id))
 
 @router.get("/history")
 def get_history(user_id: str = Depends(get_current_user_id)):
-    sb = get_supabase()
-    checkins = sb.table("wellness_checkins").select("*").eq("user_id", user_id).order("created_at", desc=True).limit(30).execute()
-    streak = sb.table("wellness_streaks").select("*").eq("user_id", user_id).maybe_single().execute()
+    db = get_mongo()
+    checkins = list(
+        db["wellness_checkins"]
+        .find({"user_id": user_id})
+        .sort("created_at", -1)
+        .limit(30)
+    )
+    for c in checkins:
+        c["id"] = str(c.pop("_id"))
+
+    streak_doc = db["wellness_streaks"].find_one({"_id": user_id}) or {}
     return {
-        "checkins": checkins.data,
-        "current_streak": (streak.data or {}).get("current_streak", 0),
+        "checkins": checkins,
+        "current_streak": streak_doc.get("current_streak", 0),
     }

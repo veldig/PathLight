@@ -1,5 +1,5 @@
 import { useAuthStore } from '@/store/authStore';
-import { supabase } from '@/lib/supabase';
+import { loadAuth } from '@/lib/auth';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
@@ -10,25 +10,27 @@ import { Colors } from '@/constants/theme';
 const queryClient = new QueryClient();
 
 function AuthGate() {
-  const { session, loaded, setSession } = useAuthStore();
+  const { token, loaded, setAuth, clearAuth } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session)).catch(() => setSession(null));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    loadAuth().then((stored) => {
+      if (stored) {
+        setAuth(stored.token, stored.user.userId, stored.user.email);
+      } else {
+        clearAuth();
+      }
     });
-    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     if (!loaded) return;
     const inAuth = segments[0] === '(auth)';
     const onLoginScreen = (segments as string[])[1] === 'login';
-    if (!session && !inAuth) router.replace('/(auth)/login');
-    if (session && onLoginScreen) router.replace('/(tabs)');
-  }, [session, loaded, segments]);
+    if (!token && !inAuth) router.replace('/(auth)/login');
+    if (token && onLoginScreen) router.replace('/(tabs)');
+  }, [token, loaded, segments]);
 
   return null;
 }

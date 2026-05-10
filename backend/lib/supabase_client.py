@@ -1,21 +1,14 @@
-import os
-from supabase import create_client, Client
-
-_client: Client | None = None
-
-
-def get_supabase() -> Client:
-    global _client
-    if _client is None:
-        url = os.environ["SUPABASE_URL"]
-        key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ["SUPABASE_KEY"]
-        _client = create_client(url, key)
-    return _client
+"""
+Thin compatibility shim — now backed by MongoDB instead of Supabase.
+Only get_user_email() is kept; all direct DB access uses lib.mongo_client.
+"""
+from lib.mongo_client import get_mongo
 
 
 def get_user_email(user_id: str) -> str:
     try:
-        resp = get_supabase().auth.admin.get_user_by_id(user_id)
-        return resp.user.email or ""
+        db = get_mongo()
+        user = db["users"].find_one({"_id": user_id}, {"email": 1})
+        return user["email"] if user else ""
     except Exception:
         return ""

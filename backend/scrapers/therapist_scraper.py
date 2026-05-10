@@ -4,7 +4,7 @@ Embeds and upserts into the Supabase `therapists` table.
 """
 import uuid
 import httpx
-from lib.supabase_client import get_supabase
+from lib.mongo_client import get_mongo
 from ml.embeddings import embed_batch
 
 CURATED = [
@@ -197,11 +197,9 @@ def run(force: bool = False) -> int:
 
 
 def _run(force: bool = False) -> int:
-    sb = get_supabase()
-    if not force:
-        existing = sb.table("therapists").select("id", count="exact").execute()
-        if (existing.count or 0) >= 5:
-            return 0
+    db = get_mongo()
+    if not force and db["therapists"].count_documents({}) >= 5:
+        return 0
 
     all_therapists = CURATED.copy()
     all_therapists.extend(_fetch_open_path())
@@ -209,8 +207,8 @@ def _run(force: bool = False) -> int:
     texts = [_embed_text(t) for t in all_therapists]
     embeddings = embed_batch(texts) or [None] * len(all_therapists)
 
-    rows = [
-        {
+    for i, t in enumerate(all_therapists):
+        row = {
             "id": str(uuid.uuid4()),
             "name": t["name"],
             "title": t.get("title", ""),
@@ -226,11 +224,9 @@ def _run(force: bool = False) -> int:
             "rating": t.get("rating", 4.5),
             "embedding": embeddings[i],
         }
-        for i, t in enumerate(all_therapists)
-    ]
+        db["therapists"].update_one({"name": row["name"]}, {"$set": row}, upsert=True)
 
-    sb.table("therapists").upsert(rows, on_conflict="name").execute()
-    return len(rows)
+    return len(all_therapists)
 
 
 def _fetch_open_path() -> list[dict]:

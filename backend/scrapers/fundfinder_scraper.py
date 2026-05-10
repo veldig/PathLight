@@ -5,7 +5,7 @@ Embeds and upserts into the Supabase `scholarships` table.
 """
 import uuid
 import httpx
-from lib.supabase_client import get_supabase
+from lib.mongo_client import get_mongo
 from ml.embeddings import embed_batch
 
 CURATED = [
@@ -276,17 +276,14 @@ def _embed_text(s: dict) -> str:
 
 
 def run(force: bool = False) -> int:
-    sb = get_supabase()
-    if not force:
-        existing = sb.table("scholarships").select("id", count="exact").execute()
-        if (existing.count or 0) >= 5:
-            return 0
+    db = get_mongo()
+    if not force and db["scholarships"].count_documents({}) >= 5:
+        return 0
 
     all_items = CURATED.copy()
     all_items.extend(_fetch_grants_gov())
 
-    # Deduplicate by name
-    seen = set()
+    seen: set = set()
     deduped = []
     for item in all_items:
         key = item.get("name", "").lower()
@@ -298,8 +295,8 @@ def run(force: bool = False) -> int:
     texts = [_embed_text(s) for s in all_items]
     embeddings = embed_batch(texts) or [None] * len(all_items)
 
-    rows = [
-        {
+    for i, s in enumerate(all_items):
+        row = {
             "id": str(uuid.uuid4()),
             "name": s["name"],
             "source": s.get("source", ""),
@@ -310,11 +307,9 @@ def run(force: bool = False) -> int:
             "url": s.get("url", ""),
             "embedding": embeddings[i],
         }
-        for i, s in enumerate(all_items)
-    ]
+        db["scholarships"].update_one({"name": row["name"]}, {"$set": row}, upsert=True)
 
-    sb.table("scholarships").upsert(rows).execute()
-    return len(rows)
+    return len(all_items)
 
 
 def _fetch_grants_gov() -> list[dict]:

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from middleware.auth import get_current_user_id
-from lib.supabase_client import get_supabase
+from lib.mongo_client import get_mongo
 
 router = APIRouter()
 
@@ -14,7 +14,8 @@ SEED_EVENTS = [
 
 @router.get("/events")
 def get_events(user_id: str = Depends(get_current_user_id)):
-    sb = get_supabase()
-    result = sb.table("events").select("*").eq("user_id", user_id).order("datetime").execute()
-    # Fall back to seed data if no events in DB yet
-    return {"events": result.data if result.data else SEED_EVENTS}
+    db = get_mongo()
+    docs = list(db["events"].find({"user_id": user_id}).sort("datetime", 1))
+    for d in docs:
+        d["id"] = str(d.pop("_id"))
+    return {"events": docs if docs else SEED_EVENTS}

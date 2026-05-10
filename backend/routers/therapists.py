@@ -1,10 +1,7 @@
-"""
-Therapist listing and search router.
-"""
 from fastapi import APIRouter, Depends, Query, HTTPException
 from middleware.auth import get_current_user_id
-from lib.supabase_client import get_supabase
-from ml.matcher import table_is_empty
+from lib.mongo_client import get_mongo
+from ml.matcher import table_is_empty, match_therapists
 
 router = APIRouter()
 
@@ -17,33 +14,30 @@ def list_therapists(
     limit: int = Query(20, le=50),
     user_id: str = Depends(get_current_user_id),
 ):
-    sb = get_supabase()
-
     if table_is_empty("therapists"):
         from scrapers import therapist_scraper
         therapist_scraper.run()
 
-    query = sb.table("therapists").select(
-        "id,name,title,platform,specialties,price_per_session,accepts_insurance,"
-        "telehealth,bio,booking_url,next_available,years_experience,rating"
+    db = get_mongo()
+    query: dict = {}
+    if insurance_only:
+        query["accepts_insurance"] = True
+    if max_price is not None:
+        query["price_per_session"] = {"$lte": max_price}
+
+    docs = list(
+        db["therapists"]
+        .find(query, {"embedding": 0})
+        .sort("rating", -1)
+        .limit(limit)
     )
 
-    if insurance_only:
-        query = query.eq("accepts_insurance", True)
-    if max_price is not None:
-        query = query.lte("price_per_session", max_price)
-
-    result = query.order("rating", desc=True).limit(limit).execute()
-    docs = result.data or []
-
-    # Client-side specialty filter (Supabase doesn't support array element ilike natively)
     if specialty:
         sl = specialty.lower()
-        docs = [
-            d for d in docs
-            if any(sl in s.lower() for s in (d.get("specialties") or []))
-        ]
+        docs = [d for d in docs if any(sl in s.lower() for s in (d.get("specialties") or []))]
 
+    for d in docs:
+        d["id"] = str(d.pop("_id"))
     return {"therapists": docs, "total": len(docs)}
 
 
@@ -53,34 +47,35 @@ def search_therapists(
     limit: int = Query(8, le=20),
     user_id: str = Depends(get_current_user_id),
 ):
-    sb = get_supabase()
-
     if table_is_empty("therapists"):
         from scrapers import therapist_scraper
         therapist_scraper.run()
 
-    # Try pgvector RPC first, fall back to text filter
+    # Try vector search first
     try:
         from ml.embeddings import embed_text
-        from ml.matcher import _rpc_search
         emb = embed_text(q)
         if emb:
-            docs = _rpc_search("match_therapists", emb, limit)
+            docs = match_therapists({"field_of_study": q}, limit=limit)
             if docs:
                 return {"therapists": docs}
     except Exception:
         pass
 
-    # Fallback: bio/platform text search
-    ql = f"%{q}%"
-    result = (
-        sb.table("therapists")
-        .select("id,name,title,platform,specialties,price_per_session,accepts_insurance,telehealth,bio,booking_url,next_available,years_experience,rating")
-        .or_(f"bio.ilike.{ql},platform.ilike.{ql},name.ilike.{ql}")
+    # Fallback: regex text search
+    db = get_mongo()
+    regex = {"$regex": q, "$options": "i"}
+    docs = list(
+        db["therapists"]
+        .find(
+            {"$or": [{"bio": regex}, {"platform": regex}, {"name": regex}]},
+            {"embedding": 0},
+        )
         .limit(limit)
-        .execute()
     )
-    return {"therapists": result.data or []}
+    for d in docs:
+        d["id"] = str(d.pop("_id"))
+    return {"therapists": docs}
 
 
 @router.get("/{therapist_id}")
@@ -88,14 +83,9 @@ def get_therapist(
     therapist_id: str,
     user_id: str = Depends(get_current_user_id),
 ):
-    sb = get_supabase()
-    result = (
-        sb.table("therapists")
-        .select("id,name,title,platform,specialties,price_per_session,accepts_insurance,telehealth,bio,booking_url,next_available,years_experience,rating")
-        .eq("id", therapist_id)
-        .maybe_single()
-        .execute()
-    )
-    if not result.data:
+    db = get_mongo()
+    doc = db["therapists"].find_one({"_id": therapist_id}, {"embedding": 0})
+    if not doc:
         raise HTTPException(status_code=404, detail="Therapist not found")
-    return result.data
+    doc["id"] = str(doc.pop("_id"))
+    return doc

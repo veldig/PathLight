@@ -168,28 +168,31 @@ def _embed_text(r: dict) -> str:
 
 
 def run(force: bool = False) -> int:
-    sb = get_supabase()
-    if not force:
-        existing = sb.table("wellness_resources").select("id", count="exact").execute()
-        if (existing.count or 0) >= 5:
-            return 0
+    try:
+        sb = get_supabase()
+        if not force:
+            existing = sb.table("wellness_resources").select("id", count="exact").execute()
+            if (existing.count or 0) >= 5:
+                return 0
 
-    texts = [_embed_text(r) for r in RESOURCES]
-    embeddings = embed_batch(texts) or [None] * len(RESOURCES)
+        texts = [_embed_text(r) for r in RESOURCES]
+        embeddings = embed_batch(texts) or [None] * len(RESOURCES)
 
-    rows = [
-        {
-            "id": str(uuid.uuid4()),
-            "name": r["name"],
-            "type": r.get("type", ""),
-            "description": r.get("description", ""),
-            "contact": r.get("contact", ""),
-            "url": r.get("url", ""),
-            "state": r.get("state"),
-            "embedding": embeddings[i],
-        }
-        for i, r in enumerate(RESOURCES)
-    ]
+        rows = [
+            {
+                "id": str(uuid.uuid4()),
+                "name": r["name"],
+                "type": r.get("type", ""),
+                "description": r.get("description", ""),
+                "contact": r.get("contact", ""),
+                "url": r.get("url", ""),
+                "state": r.get("state"),
+                "embedding": embeddings[i],
+            }
+            for i, r in enumerate(RESOURCES)
+        ]
 
-    sb.table("wellness_resources").upsert(rows).execute()
-    return len(rows)
+        sb.table("wellness_resources").upsert(rows).execute()
+        return len(rows)
+    except Exception:
+        return 0  # table doesn't exist yet — ml_schema.sql needs to be run

@@ -178,6 +178,13 @@ def _embed_text(c: dict) -> str:
 
 
 def run(force: bool = False) -> int:
+    try:
+        return _run(force)
+    except Exception:
+        return 0
+
+
+def _run(force: bool = False) -> int:
     sb = get_supabase()
     if not force:
         existing = sb.table("courses").select("id", count="exact").execute()

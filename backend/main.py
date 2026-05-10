@@ -6,6 +6,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import Response, JSONResponse
+from fastapi.exceptions import RequestValidationError
 
 from routers import auth, profile, fundfinder, careerboost, wellness, chat, calendar, therapists, focuspath
 
@@ -35,6 +36,15 @@ async def cors_middleware(request: Request, call_next):
         response.headers[k] = v
     return response
 
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logging.exception("Unhandled exception on %s %s", request.method, request.url)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"{type(exc).__name__}: {exc}"},
+        headers=CORS_HEADERS,
+    )
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(profile.router, prefix="/profile", tags=["profile"])

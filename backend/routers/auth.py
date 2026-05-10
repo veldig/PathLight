@@ -1,7 +1,8 @@
 import os
 import uuid
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from middleware.auth import get_current_user_id
 from pydantic import BaseModel
 import bcrypt
 import jwt
@@ -152,6 +153,20 @@ def google_auth(body: GoogleAuthRequest):
 
     token = create_token(user_id)
     return {"token": token, "user_id": user_id, "email": email, "name": name}
+
+
+class ChangePasswordRequest(BaseModel):
+    new_password: str
+
+
+@router.post("/change-password")
+def change_password(body: ChangePasswordRequest, user_id: str = Depends(get_current_user_id)):
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    db = get_mongo()
+    hashed = bcrypt.hashpw(body.new_password.encode(), bcrypt.gensalt()).decode()
+    db["users"].update_one({"_id": user_id}, {"$set": {"password": hashed}})
+    return {"message": "Password updated successfully"}
 
 
 @router.post("/reset-password")

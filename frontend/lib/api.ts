@@ -82,6 +82,13 @@ export const api = {
   // Calendar
   getEvents: () => request('/calendar/events'),
 
+  // Auth
+  changePassword: (newPassword: string) =>
+    request<{ message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ new_password: newPassword }),
+    }),
+
   // FocusPath
   rephraseContent: (text: string, focus_level: string) =>
     request<{ rephrased: string }>('/agents/focuspath/rephrase', {
@@ -128,4 +135,5 @@ export interface UserProfile {
   skills: string[];
   hours_per_week: number;
   childcare_needed: boolean;
+  updated_at?: string;
 }

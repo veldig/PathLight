@@ -4,24 +4,36 @@ from fastapi import APIRouter, Depends
 from anthropic import Anthropic
 from middleware.auth import get_current_user_id
 from lib.supabase_client import get_supabase
+from ml.matcher import match_scholarships, table_is_empty
 
 router = APIRouter()
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
-def build_prompt(profile: dict) -> str:
+
+def build_prompt(profile: dict, real_scholarships: list[dict]) -> str:
+    real_data_section = ""
+    if real_scholarships:
+        lines = "\n".join(
+            f"  - {s['name']} ({s.get('source', '')}): "
+            f"${s.get('amount', 0):,.0f} | Deadline: {s.get('deadline', 'Rolling')} | "
+            f"{(s.get('description') or '')[:150]}"
+            for s in real_scholarships
+        )
+        real_data_section = f"\nReal scholarships/grants matched to this user via ML vector search:\n{lines}\n\nUse these real opportunities in the scholarships and grants sections where applicable.\n"
+
     return f"""You are FundFinder, a compassionate AI financial specialist for student parents on Pathlight.
 
 Student Profile:
 - Name: {profile.get('name', 'Student')}
-- State: {profile.get('state', 'California')}
+- State: {profile.get('state', 'United States')}
 - Income Bracket: {profile.get('income_bracket', 'unknown')}
 - Family Size: {profile.get('family_size', 2)}
 - Field of Study: {profile.get('field_of_study', 'unknown')}
 - Education Level: {profile.get('education_level', 'undergraduate')}
 - Hours Available Per Week: {profile.get('hours_per_week', 20)}
 - Childcare Needed: {profile.get('childcare_needed', True)}
-- Skills: {', '.join(profile.get('skills', []))}
-
+- Skills: {', '.join(profile.get('skills') or [])}
+{real_data_section}
 Return ONLY a valid JSON object with no markdown, no code blocks, no extra text:
 
 {{
@@ -86,6 +98,7 @@ Return ONLY a valid JSON object with no markdown, no code blocks, no extra text:
   }}
 }}"""
 
+
 @router.post("/search")
 def search(user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
@@ -95,41 +108,9 @@ def search(user_id: str = Depends(get_current_user_id)):
         from scrapers import fundfinder_scraper
         fundfinder_scraper.run()
 
-    matched = match_scholarships(profile, limit=5)
+    real_scholarships = match_scholarships(profile, limit=6)
 
-    if matched:
-        opp_lines = "\n".join(
-            f"- {m['name']} ({m.get('source', '')}): "
-            f"${m.get('amount', 0):,.0f} | Deadline: {m.get('deadline', 'Rolling')} | "
-            f"{(m.get('description') or '')[:160]}"
-            for m in matched
-        )
-        prompt = (
-            f"You are FundFinder, an AI grant specialist for single parents.\n"
-            f"User profile: state={profile.get('state', 'US')}, "
-            f"income={profile.get('income_bracket', 'low income')}, "
-            f"family_size={profile.get('family_size', 2)}, "
-            f"field_of_study={profile.get('field_of_study', 'undecided')}, "
-            f"education_level={profile.get('education_level', 'some college')}.\n\n"
-            f"Real funding opportunities matched to this user via ML similarity search:\n{opp_lines}\n\n"
-            "Using the real opportunities above, return a JSON array of up to 5 the user qualifies for. "
-            "Each item must have: {id (uuid string), name, source, amount (number), deadline (string), "
-            "match_score (0.7–0.98 float), description (2–3 sentences, personalized to this user), "
-            "requirements: [strings], status: 'found'}. "
-            "Return only the JSON array — no markdown fences."
-        )
-    else:
-        prompt = (
-            f"You are FundFinder, an AI grant specialist for single parents. "
-            f"User: state={profile.get('state', 'Maine')}, income={profile.get('income_bracket', '$28k')}, "
-            f"family_size={profile.get('family_size', 2)}, field={profile.get('field_of_study', 'healthcare')}. "
-            "Return a JSON array of 4 realistic grant/scholarship opportunities this user likely qualifies for. "
-            "Each: {id (uuid string), name, source, amount (number), deadline (string), "
-            "match_score (0.0–1.0), description, requirements: [string], status: 'found'}. "
-            "Return only the JSON array — no markdown."
-        )
-
-    prompt = build_prompt(profile)
+    prompt = build_prompt(profile, real_scholarships)
 
     response = client.messages.create(
         model="claude-sonnet-4-6",
@@ -138,8 +119,6 @@ def search(user_id: str = Depends(get_current_user_id)):
     )
 
     raw = response.content[0].text.strip()
-
-    # Strip markdown code blocks if present
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
@@ -152,10 +131,3 @@ def search(user_id: str = Depends(get_current_user_id)):
         data = {"error": "Failed to parse response", "raw": raw}
 
     return {"financial_plan": data}
-
-
-@router.get("/opportunities")
-def get_opportunities(user_id: str = Depends(get_current_user_id)):
-    sb = get_supabase()
-    result = sb.table("funding_opportunities").select("*").eq("user_id", user_id).execute()
-    return {"opportunities": result.data}

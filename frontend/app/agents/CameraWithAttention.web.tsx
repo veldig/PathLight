@@ -1,6 +1,6 @@
 /**
- * Web attention camera — getUserMedia + browser FaceDetector API (Chrome/Edge).
- * Portrait crop, face guide ring, real focus classification.
+ * Web attention camera — getUserMedia + face-api.js (TinyFaceDetector via CDN).
+ * Works in Chrome, Firefox, Safari — no flags required.
  */
 import { Colors, Radius } from '@/constants/theme';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -15,17 +15,32 @@ interface Props {
 
 const GOLD = '#C08A3A';
 const NO_FACE_TIMEOUT = 1500;
+const MODEL_CDN = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+const FACEAPI_CDN = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js';
+
+function loadScript(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
 
 export default function CameraWithAttention({ focusLevel, onFocusChange }: Props) {
   const frameRef = useRef<View>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const noFaceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const detectionInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const detectionLoop = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stoppedRef = useRef(false);
 
-  const [status, setStatus] = useState<'loading' | 'granted' | 'denied' | 'running'>('loading');
-  const [hasFaceDetector, setHasFaceDetector] = useState(false);
+  const [status, setStatus] = useState<'loading' | 'denied' | 'running'>('loading');
+  const [modelReady, setModelReady] = useState(false);
 
+  // ── start webcam ────────────────────────────────────────────────────────────
   const startCamera = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -43,9 +58,8 @@ export default function CameraWithAttention({ focusLevel, onFocusChange }: Props
       video.playsInline = true;
       video.style.cssText = [
         'position:absolute', 'inset:0', 'width:100%', 'height:100%',
-        'object-fit:cover',
-        'transform:scaleX(-1)',
-        'border-radius:inherit',
+        'object-fit:cover', 'transform:scaleX(-1)', 'border-radius:inherit',
+        'z-index:1',
       ].join(';');
 
       domNode.appendChild(video);
@@ -57,48 +71,58 @@ export default function CameraWithAttention({ focusLevel, onFocusChange }: Props
     }
   }, []);
 
-  const startDetection = useCallback(() => {
-    const supported = 'FaceDetector' in window;
-    setHasFaceDetector(supported);
-    if (!supported) return;
+  // ── load face-api + model, then run detection loop ───────────────────────
+  const startDetection = useCallback(async () => {
+    try {
+      await loadScript(FACEAPI_CDN);
+      const faceapi = (window as any).faceapi;
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_CDN);
+      setModelReady(true);
 
-    // @ts-ignore
-    const detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+      const opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.4, inputSize: 224 });
 
-    detectionInterval.current = setInterval(async () => {
-      const video = videoRef.current;
-      if (!video || video.readyState < 2 || video.videoWidth === 0) return;
+      const detect = async () => {
+        if (stoppedRef.current) return;
+        const video = videoRef.current;
 
-      try {
-        const faces = await detector.detect(video);
+        if (video && video.readyState >= 2 && video.videoWidth > 0) {
+          try {
+            const det = await faceapi.detectSingleFace(video, opts);
 
-        if (!faces.length) {
-          if (!noFaceTimer.current) {
-            noFaceTimer.current = setTimeout(() => onFocusChange('low'), NO_FACE_TIMEOUT);
-          }
-          return;
+            if (!det) {
+              if (!noFaceTimer.current) {
+                noFaceTimer.current = setTimeout(() => onFocusChange('low'), NO_FACE_TIMEOUT);
+              }
+            } else {
+              if (noFaceTimer.current) { clearTimeout(noFaceTimer.current); noFaceTimer.current = null; }
+              const { box } = det;
+              const vw = video.videoWidth, vh = video.videoHeight;
+              const cx = box.x + box.width / 2;
+              const cy = box.y + box.height / 2;
+              const dx = Math.abs(cx - vw / 2) / vw;
+              const dy = Math.abs(cy - vh / 2) / vh;
+              const offset = dx + dy;
+              onFocusChange(offset < 0.15 ? 'high' : offset < 0.32 ? 'medium' : 'low');
+            }
+          } catch { /* transient */ }
         }
 
-        if (noFaceTimer.current) { clearTimeout(noFaceTimer.current); noFaceTimer.current = null; }
+        detectionLoop.current = setTimeout(detect, 600);
+      };
 
-        const { boundingBox } = faces[0];
-        const vw = video.videoWidth, vh = video.videoHeight;
-        const faceCx = boundingBox.x + boundingBox.width / 2;
-        const faceCy = boundingBox.y + boundingBox.height / 2;
-        const dx = Math.abs(faceCx - vw / 2) / vw;
-        const dy = Math.abs(faceCy - vh / 2) / vh;
-        const offset = dx + dy;
-
-        onFocusChange(offset < 0.12 ? 'high' : offset < 0.28 ? 'medium' : 'low');
-      } catch { /* transient detector errors */ }
-    }, 600);
+      detect();
+    } catch (e) {
+      console.error('face-api load failed', e);
+    }
   }, [onFocusChange]);
 
   useEffect(() => {
+    stoppedRef.current = false;
     startCamera();
     return () => {
+      stoppedRef.current = true;
       streamRef.current?.getTracks().forEach(t => t.stop());
-      if (detectionInterval.current) clearInterval(detectionInterval.current);
+      if (detectionLoop.current) clearTimeout(detectionLoop.current);
       if (noFaceTimer.current) clearTimeout(noFaceTimer.current);
     };
   }, []);
@@ -109,11 +133,9 @@ export default function CameraWithAttention({ focusLevel, onFocusChange }: Props
 
   const color = focusLevel === 'high' ? '#4caf7d' : focusLevel === 'medium' ? '#f5a623' : '#e05252';
   const label = focusLevel === 'high' ? 'High Focus' : focusLevel === 'medium' ? 'Drifting…' : 'Low Focus';
-  const emoji = focusLevel === 'high' ? '🟢' : focusLevel === 'medium' ? '🟡' : '🔴';
 
   return (
     <View style={styles.card}>
-      {/* Portrait camera frame */}
       <View ref={frameRef} style={styles.frame as any}>
 
         {status === 'denied' && (
@@ -123,6 +145,7 @@ export default function CameraWithAttention({ focusLevel, onFocusChange }: Props
             <Text style={styles.overlaySubTxt}>Allow camera in browser settings and refresh.</Text>
           </View>
         )}
+
         {status === 'loading' && (
           <View style={styles.overlay as any}>
             <Text style={styles.overlayTxt}>Starting camera…</Text>
@@ -130,9 +153,7 @@ export default function CameraWithAttention({ focusLevel, onFocusChange }: Props
         )}
 
         {/* Face guide ring */}
-        {(status === 'running' || status === 'granted') && (
-          <View style={[styles.faceRing, { borderColor: color }] as any} />
-        )}
+        <View style={[styles.faceRing, { borderColor: color }] as any} />
 
         {/* HUD corners */}
         <View style={[styles.corner, { top: 10, left: 10, borderTopWidth: 2, borderLeftWidth: 2 }]} />
@@ -150,12 +171,9 @@ export default function CameraWithAttention({ focusLevel, onFocusChange }: Props
           <View style={[styles.badgeDot, { backgroundColor: color }]} />
           <Text style={[styles.badgeText, { color }]}>{label}</Text>
         </View>
-        {!hasFaceDetector && status === 'running' && (
-          <Text style={styles.noFDNote}>Chrome flag needed for tracking</Text>
-        )}
-        {hasFaceDetector && (
-          <Text style={styles.liveNote}>● Live tracking</Text>
-        )}
+        <Text style={modelReady ? styles.liveNote : styles.loadingNote}>
+          {modelReady ? '● Live tracking' : status === 'running' ? 'Loading model…' : ''}
+        </Text>
       </View>
     </View>
   );
@@ -185,7 +203,7 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 100,
     borderWidth: 2,
-    opacity: 0.6,
+    opacity: 0.7,
     zIndex: 3,
   } as any,
   overlay: {
@@ -196,12 +214,13 @@ const styles = StyleSheet.create({
     gap: 8,
     zIndex: 4,
     padding: 20,
+    backgroundColor: '#1a2535',
   },
   overlayIcon: { fontSize: 32 },
   overlayTxt: { color: '#fff', fontWeight: '700', fontSize: 14, textAlign: 'center' },
   overlaySubTxt: { color: '#9aaabb', fontSize: 12, textAlign: 'center', lineHeight: 18 },
-  corner: { position: 'absolute', width: 18, height: 18, borderColor: GOLD },
-  dot: { position: 'absolute', bottom: 14, right: 14, width: 10, height: 10, borderRadius: 5 },
+  corner: { position: 'absolute', width: 18, height: 18, borderColor: GOLD, zIndex: 3 },
+  dot: { position: 'absolute', bottom: 14, right: 14, width: 10, height: 10, borderRadius: 5, zIndex: 3 },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: 280 },
   badge: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -209,6 +228,6 @@ const styles = StyleSheet.create({
   },
   badgeDot: { width: 8, height: 8, borderRadius: 4 },
   badgeText: { fontSize: 13, fontWeight: '700' },
-  noFDNote: { fontSize: 11, color: Colors.textLight, fontStyle: 'italic' },
   liveNote: { fontSize: 11, color: '#4caf7d', fontWeight: '700' },
+  loadingNote: { fontSize: 11, color: Colors.textLight, fontStyle: 'italic' },
 });

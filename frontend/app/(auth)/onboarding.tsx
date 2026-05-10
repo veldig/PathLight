@@ -1,5 +1,6 @@
 import { Colors, Radius, Shadow } from '@/constants/theme';
-import { api, UserProfile } from '@/lib/api';
+import { UserProfile } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -31,7 +32,12 @@ export default function OnboardingScreen() {
   async function finish() {
     setLoading(true);
     try {
-      await api.updateProfile(profile);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not signed in');
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({ id: user.id, ...profile });
+      if (error) throw error;
       router.replace('/(tabs)');
     } catch (e: any) {
       Alert.alert('Error saving profile', e.message);

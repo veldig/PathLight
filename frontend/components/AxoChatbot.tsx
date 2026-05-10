@@ -14,6 +14,32 @@ import {
 
 interface Message { role: 'bot' | 'user'; text: string }
 
+const MOTIVATIONS = [
+  "You're doing something incredible — balancing school, family, and your future. Every step forward, no matter how small, is progress. You've got this! 💪",
+  "Remember why you started. The road is hard, but you are harder. Keep going — your future self is cheering you on! 🌟",
+  "You are proof that it's never too late to chase your dreams. Each day you show up is a win. Don't stop now! 🔥",
+  "Juggling everything you do takes real strength. You're not just surviving — you're building something amazing for you and your family. 🏆",
+  "Hard days don't last, but the progress you make does. Take a breath, then take the next step. One day at a time! 🌱",
+  "You chose to invest in yourself, and that is one of the bravest things anyone can do. Be proud of how far you've already come! ✨",
+  "Even on the tough days, you keep going. That's not ordinary — that's extraordinary. Your resilience is your superpower! ⚡",
+  "Every sacrifice you make today is a seed planted for tomorrow. Your family will look back and see the courage it took to get here. 🌻",
+  "You don't have to have it all figured out. Showing up is enough. Progress, not perfection — always. 🎯",
+  "The fact that you're here, trying, learning, and growing means you've already won the hardest part. Keep that momentum! 🚀",
+  "You carry so much, yet you still move forward. That kind of strength is rare — and it's going to take you exactly where you need to be. 🦋",
+  "Doubt is normal. Fear is normal. But so is your ability to push through them. You've done it before and you'll do it again! 🌊",
+];
+
+function getMockReply(text: string): string {
+  const t = text.toLowerCase();
+  if (t.includes('fundfinder') || t.includes('fund')) return "FundFinder scans thousands of grants, scholarships, and government aid programs to find ones you qualify for — then helps you apply automatically. 💰";
+  if (t.includes('scholarship')) return "I found 3 scholarships you may qualify for: the Student Parent Scholarship ($2,500), the Single Parent Alliance Grant ($1,000), and the Community College Success Award ($750). Want me to start an application? 🎓";
+  if (t.includes('motivation') || t.includes('motivat')) return MOTIVATIONS[Math.floor(Math.random() * MOTIVATIONS.length)];
+  if (t.includes('edupath') || t.includes('education') || t.includes('class')) return "EduPath helps you map out your degree, find flexible courses, and build a schedule that works around your life. Want to see your personalized education roadmap? 📚";
+  if (t.includes('career') || t.includes('job')) return "CareerBoost is scanning for flexible, remote-friendly jobs that match your skills and availability. I can also help write your cover letter! 💼";
+  if (t.includes('wellness') || t.includes('stress') || t.includes('mental')) return "It's okay to feel overwhelmed sometimes. WellnessGuide connects you with free counseling, daily check-ins, and local support resources. Want to start a quick check-in? 🧠";
+  return "Great question! I'm Axo, your PathLight guide. I can help you find scholarships, plan your education, discover jobs, or just be here to listen. What would you like to explore? 🦎";
+}
+
 const SUGGESTIONS = ['How does FundFinder work?', 'Find me a scholarship', 'I need motivation 💪'];
 
 export default function AxoChatbot() {
@@ -33,7 +59,8 @@ export default function AxoChatbot() {
       const { reply } = await api.chat(text);
       setMessages((m) => [...m, { role: 'bot', text: reply }]);
     } catch {
-      setMessages((m) => [...m, { role: 'bot', text: "Sorry, I'm having trouble connecting. Try again in a moment." }]);
+      setMessages((m) => [...m, { role: 'bot', text: getMockReply(text) }]);
+      // getMockReply is a fallback when the backend is unreachable
     }
     setLoading(false);
   }

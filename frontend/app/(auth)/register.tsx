@@ -22,14 +22,22 @@ export default function RegisterScreen() {
 
   async function signUp() {
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { name } },
     });
     setLoading(false);
-    if (error) Alert.alert('Sign up failed', error.message);
-    else router.replace('/(auth)/onboarding');
+    if (error) {
+      console.error('[signUp] error:', error.message);
+      Alert.alert('Sign up failed', error.message);
+    } else if (!data.session) {
+      console.warn('[signUp] no session — email confirmation required');
+      Alert.alert('Check your email', 'We sent you a confirmation link. Click it to activate your account, then sign in.');
+    } else {
+      console.log('[signUp] success, navigating to onboarding');
+      router.replace('/(auth)/onboarding');
+    }
   }
 
   return (

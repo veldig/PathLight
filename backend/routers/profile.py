@@ -10,9 +10,9 @@ router = APIRouter()
 def get_profile(user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     result = (
-        sb.table("users_profile")
+        sb.table("profiles")
         .select("*")
-        .eq("user_id", user_id)
+        .eq("id", user_id)
         .maybe_single()
         .execute()
     )
@@ -28,11 +28,11 @@ def update_profile(
 ):
     sb = get_supabase()
     payload = profile.model_dump(exclude={"id"})
-    payload["user_id"] = user_id
+    payload["id"] = user_id
 
     result = (
-        sb.table("users_profile")
-        .upsert(payload, on_conflict="user_id")
+        sb.table("profiles")
+        .upsert(payload, on_conflict="id")
         .select()
         .single()
         .execute()

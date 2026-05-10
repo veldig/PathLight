@@ -12,7 +12,7 @@ client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 @router.post("/search")
 def search(user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
-    profile_result = sb.table("users_profile").select("*").eq("user_id", user_id).maybe_single().execute()
+    profile_result = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
     profile = profile_result.data or {}
 
     prompt = (
@@ -36,7 +36,7 @@ def search(user_id: str = Depends(get_current_user_id)):
 @router.get("/opportunities")
 def get_opportunities(user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
-    result = sb.table("funding_opportunities").select("*").eq("user_id", user_id).execute()
+    result = sb.table("funding_opportunities").select("*").eq("id", user_id).execute()
     return {"opportunities": result.data}
 
 
@@ -50,6 +50,6 @@ def confirm_application(
         return {"status": "cancelled", "id": opportunity_id}
 
     sb = get_supabase()
-    sb.table("funding_opportunities").update({"status": "submitted"}).eq("id", opportunity_id).eq("user_id", user_id).execute()
+    sb.table("funding_opportunities").update({"status": "submitted"}).eq("id", opportunity_id).eq("id", user_id).execute()
     # TODO: trigger Selenium form submission here
     return {"status": "submitted", "id": opportunity_id, "message": "Application submitted successfully."}

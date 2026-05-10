@@ -11,7 +11,7 @@ client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 @router.post("/analyze")
 def analyze(user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
-    profile_result = sb.table("users_profile").select("*").eq("user_id", user_id).maybe_single().execute()
+    profile_result = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
     profile = profile_result.data or {}
 
     prompt = (
@@ -34,5 +34,5 @@ def analyze(user_id: str = Depends(get_current_user_id)):
 @router.get("/plan")
 def get_plan(user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
-    result = sb.table("education_plans").select("*").eq("user_id", user_id).maybe_single().execute()
+    result = sb.table("education_plans").select("*").eq("id", user_id).maybe_single().execute()
     return {"plan": result.data}

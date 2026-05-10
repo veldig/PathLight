@@ -135,7 +135,7 @@ export default function CalendarConnectSheet({ visible, onClose, events }: Props
                 </Text>
                 <Text style={styles.optionSub}>
                   {Platform.OS === 'android'
-                    ? 'Sync to your phone's default calendar'
+                    ? "Sync to your phone's default calendar"
                     : 'Sync to your iPhone or iCloud calendar'}
                 </Text>
               </View>

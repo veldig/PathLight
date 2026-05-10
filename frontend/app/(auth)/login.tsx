@@ -21,9 +21,14 @@ export default function LoginScreen() {
 
   async function signIn() {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) Alert.alert('Sign in failed', error.message);
+    if (error) {
+      console.error('[signIn] error:', error.message);
+      Alert.alert('Sign in failed', error.message);
+    } else {
+      console.log('[signIn] success, session:', data.session?.user?.email);
+    }
   }
 
   return (

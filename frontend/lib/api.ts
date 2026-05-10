@@ -78,6 +78,23 @@ export const api = {
 
   // Calendar
   getEvents: () => request('/calendar/events'),
+
+  // FocusPath
+  rephraseContent: (text: string, focus_level: string) =>
+    request<{ rephrased: string }>('/agents/focuspath/rephrase', {
+      method: 'POST',
+      body: JSON.stringify({ text, focus_level }),
+    }),
+  getFocusHint: (topic: string, focus_level: string, mode: string) =>
+    request<{ hint: string }>('/agents/focuspath/hint', {
+      method: 'POST',
+      body: JSON.stringify({ topic, focus_level, mode }),
+    }),
+  speakText: (text: string) =>
+    request<{ audio_b64: string }>('/agents/focuspath/speak', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
 };
 
 export interface Therapist {

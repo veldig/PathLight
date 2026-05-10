@@ -5,7 +5,7 @@ import os
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import profile, edupath, fundfinder, careerboost, wellness, chat, calendar, auth, therapists
+from routers import profile, edupath, fundfinder, careerboost, wellness, chat, calendar, auth, therapists, focuspath
 
 app = FastAPI(title="PathLight API", version="1.0.0")
 
@@ -26,6 +26,7 @@ app.include_router(wellness.router, prefix="/agents/wellness", tags=["wellness"]
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(calendar.router, prefix="/calendar", tags=["calendar"])
 app.include_router(therapists.router, prefix="/agents/wellness/therapists", tags=["therapists"])
+app.include_router(focuspath.router, prefix="/agents/focuspath", tags=["focuspath"])
 
 
 @app.get("/health")

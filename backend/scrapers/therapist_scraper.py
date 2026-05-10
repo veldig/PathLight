@@ -1,10 +1,10 @@
 """
-Therapist scraper: curated telehealth therapists + live Open Path / SAMHSA data.
-Stores into the MongoDB `therapists` collection with embeddings.
+Therapist scraper: curated telehealth therapists + live SAMHSA data.
+Embeds and upserts into the Supabase `therapists` table.
 """
 import uuid
 import httpx
-from lib.mongo_client import get_mongo
+from lib.supabase_client import get_supabase
 from ml.embeddings import embed_batch
 
 CURATED = [
@@ -197,9 +197,10 @@ def run(force: bool = False) -> int:
 
 
 def _run(force: bool = False) -> int:
-    db = get_mongo()
+    sb = get_supabase()
     if not force:
-        if db["therapists"].count_documents({}) >= 5:
+        existing = sb.table("therapists").select("id", count="exact").execute()
+        if (existing.count or 0) >= 5:
             return 0
 
     all_therapists = CURATED.copy()
@@ -208,8 +209,8 @@ def _run(force: bool = False) -> int:
     texts = [_embed_text(t) for t in all_therapists]
     embeddings = embed_batch(texts) or [None] * len(all_therapists)
 
-    for i, t in enumerate(all_therapists):
-        doc = {
+    rows = [
+        {
             "id": str(uuid.uuid4()),
             "name": t["name"],
             "title": t.get("title", ""),
@@ -225,9 +226,11 @@ def _run(force: bool = False) -> int:
             "rating": t.get("rating", 4.5),
             "embedding": embeddings[i],
         }
-        db["therapists"].update_one({"name": doc["name"]}, {"$set": doc}, upsert=True)
+        for i, t in enumerate(all_therapists)
+    ]
 
-    return len(all_therapists)
+    sb.table("therapists").upsert(rows, on_conflict="name").execute()
+    return len(rows)
 
 
 def _fetch_open_path() -> list[dict]:

@@ -8,7 +8,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 
 const AGENTS = [
   {
-    id: 'edupath',
+    id: 'focuspath',
     name: 'FocusPath Agent',
     role: 'Detects your focus, rephrases tough content & switches between text, video or quiz — adapts to you in real time.',
     icon: '🎯',

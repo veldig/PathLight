@@ -1,5 +1,5 @@
 import { getAccessToken } from './profileService';
-import { clearAuthData } from './supabase';
+import { supabase } from './supabase';
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
 
@@ -14,10 +14,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
   });
   if (res.status === 401) {
-    // Token is invalid or expired — clear stored credentials and force re-login
-    await clearAuthData();
+    await supabase.auth.signOut();
     const { useAuthStore } = await import('@/store/authStore');
-    useAuthStore.getState().clearAuth();
+    useAuthStore.getState().setSession(null);
     throw new Error('Session expired. Please sign in again.');
   }
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
@@ -29,10 +28,6 @@ export const api = {
   getProfile: () => request<UserProfile>('/profile'),
   updateProfile: (data: Partial<UserProfile>) =>
     request<UserProfile>('/profile', { method: 'PUT', body: JSON.stringify(data) }),
-
-  // EduPath
-  analyzeEducation: () => request('/agents/edupath/analyze', { method: 'POST' }),
-  getEducationPlan: () => request('/agents/edupath/plan'),
 
   // FundFinder
   searchFunding: () => request('/agents/fundfinder/search', { method: 'POST' }),

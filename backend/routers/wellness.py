@@ -6,7 +6,7 @@ from pydantic import BaseModel
 import httpx
 from anthropic import Anthropic
 from middleware.auth import get_current_user_id
-from lib.mongo_client import get_mongo
+from lib.supabase_client import get_supabase
 from ml.matcher import match_wellness_resources, table_is_empty
 
 router = APIRouter()
@@ -46,11 +46,11 @@ class SpeakRequest(BaseModel):
 
 @router.post("/checkin")
 def start_checkin(user_id: str = Depends(get_current_user_id)):
-    db = get_mongo()
+    sb = get_supabase()
 
-    streak_doc = db["wellness_streaks"].find_one({"_id": user_id}) or {}
-    last_checkin = streak_doc.get("last_checkin")
-    current_streak = streak_doc.get("current_streak", 0)
+    streak_data = sb.table("wellness_streaks").select("*").eq("user_id", user_id).maybe_single().execute().data or {}
+    last_checkin = streak_data.get("last_checkin")
+    current_streak = streak_data.get("current_streak", 0)
 
     today = date.today().isoformat()
     if last_checkin == today:
@@ -60,19 +60,16 @@ def start_checkin(user_id: str = Depends(get_current_user_id)):
     else:
         new_streak = 1
 
-    db["wellness_streaks"].update_one(
-        {"_id": user_id},
-        {"$set": {"current_streak": new_streak, "last_checkin": today}},
-        upsert=True,
-    )
+    sb.table("wellness_streaks").upsert(
+        {"user_id": user_id, "current_streak": new_streak, "last_checkin": today},
+        on_conflict="user_id",
+    ).execute()
 
     if table_is_empty("wellness_resources"):
         from scrapers import wellness_scraper
         wellness_scraper.run()
 
-    profile = db["profiles"].find_one({"_id": user_id}) or {}
-    if profile:
-        profile["id"] = profile.pop("_id", user_id)
+    profile = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute().data or {}
     matched_resources = match_wellness_resources(profile, limit=3)
 
     resource_context = ""
@@ -140,9 +137,10 @@ async def speak(body: SpeakRequest, user_id: str = Depends(get_current_user_id))
 
 @router.get("/history")
 def get_history(user_id: str = Depends(get_current_user_id)):
-    db = get_mongo()
-    checkins = list(db["wellness_checkins"].find({"user_id": user_id}).sort("created_at", -1).limit(30))
-    for c in checkins:
-        c["id"] = str(c.pop("_id"))
-    streak_doc = db["wellness_streaks"].find_one({"_id": user_id}) or {}
-    return {"checkins": checkins, "current_streak": streak_doc.get("current_streak", 0)}
+    sb = get_supabase()
+    checkins = sb.table("wellness_checkins").select("*").eq("user_id", user_id).order("created_at", desc=True).limit(30).execute()
+    streak = sb.table("wellness_streaks").select("*").eq("user_id", user_id).maybe_single().execute()
+    return {
+        "checkins": checkins.data,
+        "current_streak": (streak.data or {}).get("current_streak", 0),
+    }

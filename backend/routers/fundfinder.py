@@ -1,20 +1,18 @@
 import os
 import json
-import logging
-from fastapi import APIRouter, Depends, HTTPException
+import asyncio
+from fastapi import APIRouter, Depends
 from anthropic import Anthropic
 from middleware.auth import get_current_user_id
-from lib.mongo_client import get_mongo
+from lib.supabase_client import get_supabase, get_user_email
 from ml.matcher import match_scholarships, table_is_empty
 from models.schema import AutoApplyPreviewRequest, AutoApplySubmitRequest
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
 
-def build_prompt(profile: dict, real_scholarships: list) -> str:
+def build_prompt(profile: dict, real_scholarships: list[dict]) -> str:
     real_data_section = ""
     if real_scholarships:
         lines = "\n".join(
@@ -105,16 +103,15 @@ Return ONLY a valid JSON object with no markdown, no code blocks, no extra text:
 
 @router.post("/search")
 def search(user_id: str = Depends(get_current_user_id)):
-    db = get_mongo()
-    profile = db["profiles"].find_one({"_id": user_id}) or {}
-    if profile:
-        profile["id"] = profile.pop("_id", user_id)
+    sb = get_supabase()
+    profile = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute().data or {}
 
     if table_is_empty("scholarships"):
         from scrapers import fundfinder_scraper
         fundfinder_scraper.run()
 
     real_scholarships = match_scholarships(profile, limit=6)
+
     prompt = build_prompt(profile, real_scholarships)
 
     response = client.messages.create(
@@ -132,8 +129,8 @@ def search(user_id: str = Depends(get_current_user_id)):
 
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"Failed to parse AI response: {e}")
+    except json.JSONDecodeError:
+        data = {"error": "Failed to parse response", "raw": raw}
 
     return {"financial_plan": data}
 
@@ -143,10 +140,10 @@ async def auto_apply_preview(
     body: AutoApplyPreviewRequest,
     user_id: str = Depends(get_current_user_id),
 ):
-    db = get_mongo()
-    profile = db["profiles"].find_one({"_id": user_id}) or {}
-    if profile:
-        profile["id"] = profile.pop("_id", user_id)
+    """Fill the scholarship/grant application form using the user's profile. Returns preview for review."""
+    sb = get_supabase()
+    profile = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute().data or {}
+    profile["email"] = get_user_email(user_id)
     from agents.form_agent import preview
     return await preview(body.url, profile)
 
@@ -156,9 +153,9 @@ async def auto_apply_submit(
     body: AutoApplySubmitRequest,
     user_id: str = Depends(get_current_user_id),
 ):
-    db = get_mongo()
-    profile = db["profiles"].find_one({"_id": user_id}) or {}
-    if profile:
-        profile["id"] = profile.pop("_id", user_id)
+    """Re-fill and submit the application with the user-confirmed field values."""
+    sb = get_supabase()
+    profile = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute().data or {}
+    profile["email"] = get_user_email(user_id)
     from agents.form_agent import confirm_and_submit
     return await confirm_and_submit(body.url, profile, body.filled_values)

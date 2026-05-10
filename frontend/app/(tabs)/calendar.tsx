@@ -18,7 +18,7 @@ const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 const AGENT_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  edupath:     { bg: Colors.sageLight,  text: '#3a7a50',  dot: Colors.sage },
+  focuspath:   { bg: Colors.sageLight,  text: '#3a7a50',  dot: Colors.sage },
   fundfinder:  { bg: Colors.terraLight, text: '#a04030',  dot: Colors.terracotta },
   careerboost: { bg: '#e8eef7',         text: Colors.navy, dot: Colors.navy },
   wellness:    { bg: Colors.lavender,   text: '#5a4a90',  dot: Colors.lavenderMid },
@@ -240,7 +240,7 @@ export default function CalendarScreen() {
 }
 
 function agentLabel(agent: string): string {
-  return { edupath: 'EduPath', fundfinder: 'FundFinder', careerboost: 'CareerBoost', wellness: 'Wellness' }[agent] ?? agent;
+  return { focuspath: 'FocusPath', fundfinder: 'FundFinder', careerboost: 'CareerBoost', wellness: 'Wellness' }[agent] ?? agent;
 }
 
 const styles = StyleSheet.create({

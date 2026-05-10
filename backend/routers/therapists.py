@@ -1,102 +1,86 @@
 """
 Therapist listing and search router.
 """
-import os
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from middleware.auth import get_current_user_id
-from lib.mongo_client import get_mongo
-from ml.embeddings import embed_text
+from lib.supabase_client import get_supabase
+from ml.matcher import table_is_empty
 
 router = APIRouter()
 
 
 @router.get("/list")
 def list_therapists(
-    specialty: str = Query(None, description="Filter by specialty keyword"),
-    max_price: int = Query(None, description="Maximum price per session"),
-    insurance_only: bool = Query(False, description="Only show insurance-accepting therapists"),
+    specialty: str = Query(None),
+    max_price: int = Query(None),
+    insurance_only: bool = Query(False),
     limit: int = Query(20, le=50),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Return therapist listings with optional filters."""
-    db = get_mongo()
+    sb = get_supabase()
 
-    if db["therapists"].count_documents({}) < 5:
+    if table_is_empty("therapists"):
         from scrapers import therapist_scraper
         therapist_scraper.run()
 
-    query: dict = {}
-    if insurance_only:
-        query["accepts_insurance"] = True
-    if max_price is not None:
-        query["price_per_session"] = {"$lte": max_price}
-    if specialty:
-        query["specialties"] = {"$elemMatch": {"$regex": specialty, "$options": "i"}}
-
-    docs = list(
-        db["therapists"]
-        .find(query, {"embedding": 0})
-        .sort("rating", -1)
-        .limit(limit)
+    query = sb.table("therapists").select(
+        "id,name,title,platform,specialties,price_per_session,accepts_insurance,"
+        "telehealth,bio,booking_url,next_available,years_experience,rating"
     )
-    for d in docs:
-        d["id"] = str(d.pop("_id", d.get("id", "")))
+
+    if insurance_only:
+        query = query.eq("accepts_insurance", True)
+    if max_price is not None:
+        query = query.lte("price_per_session", max_price)
+
+    result = query.order("rating", desc=True).limit(limit).execute()
+    docs = result.data or []
+
+    # Client-side specialty filter (Supabase doesn't support array element ilike natively)
+    if specialty:
+        sl = specialty.lower()
+        docs = [
+            d for d in docs
+            if any(sl in s.lower() for s in (d.get("specialties") or []))
+        ]
+
     return {"therapists": docs, "total": len(docs)}
 
 
 @router.get("/search")
 def search_therapists(
-    q: str = Query(..., description="Natural language search query"),
+    q: str = Query(...),
     limit: int = Query(8, le=20),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Semantic search for therapists matching a query."""
-    import numpy as np
+    sb = get_supabase()
 
-    db = get_mongo()
-
-    if db["therapists"].count_documents({}) < 5:
+    if table_is_empty("therapists"):
         from scrapers import therapist_scraper
         therapist_scraper.run()
 
-    query_emb = embed_text(q)
-    if not query_emb:
-        # Fall back to text search
-        docs = list(
-            db["therapists"]
-            .find(
-                {"$or": [
-                    {"specialties": {"$elemMatch": {"$regex": q, "$options": "i"}}},
-                    {"bio": {"$regex": q, "$options": "i"}},
-                    {"name": {"$regex": q, "$options": "i"}},
-                ]},
-                {"embedding": 0},
-            )
-            .limit(limit)
-        )
-        for d in docs:
-            d["id"] = str(d.pop("_id", d.get("id", "")))
-        return {"therapists": docs}
+    # Try pgvector RPC first, fall back to text filter
+    try:
+        from ml.embeddings import embed_text
+        from ml.matcher import _rpc_search
+        emb = embed_text(q)
+        if emb:
+            docs = _rpc_search("match_therapists", emb, limit)
+            if docs:
+                return {"therapists": docs}
+    except Exception:
+        pass
 
-    # Cosine similarity in Python
-    all_docs = list(db["therapists"].find({"embedding": {"$exists": True}}))
-    q_vec = np.array(query_emb)
-
-    scored = []
-    for doc in all_docs:
-        emb = doc.get("embedding")
-        if not emb:
-            continue
-        v = np.array(emb)
-        norm = np.linalg.norm(q_vec) * np.linalg.norm(v)
-        score = float(np.dot(q_vec, v) / norm) if norm else 0.0
-        doc.pop("embedding", None)
-        doc["id"] = str(doc.pop("_id", doc.get("id", "")))
-        doc["similarity"] = round(score, 4)
-        scored.append(doc)
-
-    scored.sort(key=lambda x: x["similarity"], reverse=True)
-    return {"therapists": scored[:limit]}
+    # Fallback: bio/platform text search
+    ql = f"%{q}%"
+    result = (
+        sb.table("therapists")
+        .select("id,name,title,platform,specialties,price_per_session,accepts_insurance,telehealth,bio,booking_url,next_available,years_experience,rating")
+        .or_(f"bio.ilike.{ql},platform.ilike.{ql},name.ilike.{ql}")
+        .limit(limit)
+        .execute()
+    )
+    return {"therapists": result.data or []}
 
 
 @router.get("/{therapist_id}")
@@ -104,11 +88,14 @@ def get_therapist(
     therapist_id: str,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Get a single therapist by id field."""
-    db = get_mongo()
-    doc = db["therapists"].find_one({"id": therapist_id}, {"embedding": 0})
-    if not doc:
-        from fastapi import HTTPException
+    sb = get_supabase()
+    result = (
+        sb.table("therapists")
+        .select("id,name,title,platform,specialties,price_per_session,accepts_insurance,telehealth,bio,booking_url,next_available,years_experience,rating")
+        .eq("id", therapist_id)
+        .maybe_single()
+        .execute()
+    )
+    if not result.data:
         raise HTTPException(status_code=404, detail="Therapist not found")
-    doc["id"] = str(doc.pop("_id", doc.get("id", "")))
-    return doc
+    return result.data

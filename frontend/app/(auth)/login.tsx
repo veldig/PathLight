@@ -1,10 +1,7 @@
 import { Colors, Radius, Shadow } from '@/constants/theme';
-import { saveAuthData } from '@/lib/supabase';
-import { useAuthStore } from '@/store/authStore';
+import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
+import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -13,87 +10,24 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  ActivityIndicator,
 } from 'react-native';
-
-WebBrowser.maybeCompleteAuthSession();
-
-const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
-const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
 
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    webClientId: GOOGLE_WEB_CLIENT_ID,
-    scopes: ['profile', 'email'],
-  });
-
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { authentication } = response;
-      if (authentication?.accessToken) {
-        handleGoogleToken(authentication.accessToken);
-      }
-    } else if (response?.type === 'error') {
-      setError('Google sign in failed. Please try again.');
-    }
-  }, [response]);
-
-  async function handleGoogleToken(accessToken: string) {
-    setGoogleLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`${API_BASE}/auth/google`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ access_token: accessToken }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.detail ?? 'Google sign in failed');
-        return;
-      }
-      await saveAuthData(data.token, { id: data.user_id, email: data.email });
-      useAuthStore.getState().setAuth(data.token, { id: data.user_id, email: data.email });
-      router.replace('/(tabs)');
-    } catch (e: any) {
-      setError(e.message ?? 'Connection error. Check your network.');
-    } finally {
-      setGoogleLoading(false);
-    }
-  }
-
   async function signIn() {
-    if (!email.trim() || !password) {
-      setError('Please enter your email and password.');
-      return;
-    }
     setLoading(true);
     setError('');
-    try {
-      const res = await fetch(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.detail ?? 'Sign in failed. Check your credentials.');
-        return;
-      }
-      await saveAuthData(data.token, { id: data.user_id, email: data.email });
-      useAuthStore.getState().setAuth(data.token, { id: data.user_id, email: data.email });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) {
+      setError(error.message);
+    } else if (data.session) {
       router.replace('/(tabs)');
-    } catch (e: any) {
-      setError(e.message ?? 'Connection error. Is the server running?');
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -111,71 +45,32 @@ export default function LoginScreen() {
         </View>
         <Text style={styles.tagline}>Your AI guide to education, funding & wellness</Text>
 
-        <TouchableOpacity
-          style={[styles.googleBtn, (googleLoading || !request) && styles.btnDisabled]}
-          onPress={() => { setError(''); promptAsync(); }}
-          disabled={!request || googleLoading}
-        >
-          {googleLoading
-            ? <ActivityIndicator size="small" color={Colors.textMid} />
-            : <Text style={styles.googleIcon}>G</Text>
-          }
-          <Text style={styles.googleBtnText}>
-            {googleLoading ? 'Signing in…' : 'Continue with Google'}
-          </Text>
-        </TouchableOpacity>
-
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
-        </View>
+        {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
 
         <TextInput
           style={styles.input}
           placeholder="Email"
           placeholderTextColor={Colors.textLight}
           value={email}
-          onChangeText={(t) => { setEmail(t); setError(''); }}
+          onChangeText={setEmail}
           autoCapitalize="none"
           keyboardType="email-address"
-          autoComplete="email"
         />
         <TextInput
           style={styles.input}
           placeholder="Password"
           placeholderTextColor={Colors.textLight}
           value={password}
-          onChangeText={(t) => { setPassword(t); setError(''); }}
+          onChangeText={setPassword}
           secureTextEntry
-          autoComplete="current-password"
         />
 
-        {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
-
-        <TouchableOpacity
-          style={[styles.btn, loading && styles.btnDisabled]}
-          onPress={signIn}
-          disabled={loading}
-        >
-          {loading
-            ? <ActivityIndicator size="small" color={Colors.white} />
-            : <Text style={styles.btnText}>Sign In</Text>
-          }
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')}>
-          <Text style={styles.forgotLink}>Forgot password?</Text>
+        <TouchableOpacity style={[styles.btn, loading && { opacity: 0.7 }]} onPress={signIn} disabled={loading}>
+          <Text style={styles.btnText}>{loading ? 'Signing in…' : 'Sign In'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-          <Text style={styles.link}>
-            Don't have an account? <Text style={styles.linkBold}>Sign up</Text>
-          </Text>
+          <Text style={styles.link}>Don't have an account? <Text style={styles.linkBold}>Sign up</Text></Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -189,31 +84,16 @@ const styles = StyleSheet.create({
   logoIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.sage, alignItems: 'center', justifyContent: 'center' },
   logoEmoji: { fontSize: 20 },
   logoText: { fontSize: 24, fontWeight: '700', color: Colors.navy },
-  tagline: { fontSize: 14, color: Colors.textMid, marginBottom: 20, lineHeight: 20 },
-  googleBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.md,
-    padding: 14, backgroundColor: Colors.white, gap: 10,
-  },
-  googleIcon: { fontSize: 16, fontWeight: '700', color: '#4285F4' },
-  googleBtnText: { fontSize: 15, fontWeight: '600', color: Colors.textDark },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 16, gap: 10 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { fontSize: 13, color: Colors.textLight },
+  tagline: { fontSize: 14, color: Colors.textMid, marginBottom: 28, lineHeight: 20 },
   input: {
     borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.md,
     padding: 14, fontSize: 15, color: Colors.textDark,
     backgroundColor: Colors.cream, marginBottom: 14,
   },
-  errorBox: {
-    backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca',
-    borderRadius: Radius.sm, padding: 12, marginBottom: 12,
-  },
-  errorText: { color: '#dc2626', fontSize: 13.5, textAlign: 'center' },
   btn: { backgroundColor: Colors.navy, borderRadius: Radius.md, padding: 16, alignItems: 'center', marginTop: 4 },
-  btnDisabled: { opacity: 0.6 },
   btnText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
-  forgotLink: { textAlign: 'center', marginTop: 12, fontSize: 13.5, color: Colors.navy, fontWeight: '500' },
-  link: { textAlign: 'center', marginTop: 10, fontSize: 13.5, color: Colors.textMid },
+  link: { textAlign: 'center', marginTop: 18, fontSize: 13.5, color: Colors.textMid },
   linkBold: { color: Colors.navy, fontWeight: '600' },
+  errorBox: { backgroundColor: '#fde8e8', borderRadius: Radius.md, padding: 12, marginBottom: 14 },
+  errorText: { color: '#c0392b', fontSize: 13, textAlign: 'center' },
 });

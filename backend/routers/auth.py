@@ -25,6 +25,11 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ResetPasswordRequest(BaseModel):
+    email: str
+    new_password: str
+
+
 def create_token(user_id: str) -> str:
     payload = {
         "sub": user_id,
@@ -81,3 +86,18 @@ def login(body: LoginRequest):
 
     token = create_token(str(user["_id"]))
     return {"token": token, "user_id": str(user["_id"]), "email": user["email"]}
+
+
+@router.post("/reset-password")
+def reset_password(body: ResetPasswordRequest):
+    db = get_mongo()
+    user = db["users"].find_one({"email": body.email})
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found with that email")
+
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    hashed = bcrypt.hashpw(body.new_password.encode(), bcrypt.gensalt()).decode()
+    db["users"].update_one({"email": body.email}, {"$set": {"password": hashed}})
+    return {"message": "Password updated successfully"}

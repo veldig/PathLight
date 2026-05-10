@@ -80,6 +80,10 @@ export default function LoginScreen() {
           <Text style={styles.btnText}>{loading ? 'Signing in…' : 'Sign In'}</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')}>
+          <Text style={styles.forgotLink}>Forgot password?</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
           <Text style={styles.link}>Don't have an account? <Text style={styles.linkBold}>Sign up</Text></Text>
         </TouchableOpacity>
@@ -103,6 +107,7 @@ const styles = StyleSheet.create({
   },
   btn: { backgroundColor: Colors.navy, borderRadius: Radius.md, padding: 16, alignItems: 'center', marginTop: 4 },
   btnText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
-  link: { textAlign: 'center', marginTop: 18, fontSize: 13.5, color: Colors.textMid },
+  forgotLink: { textAlign: 'center', marginTop: 12, fontSize: 13.5, color: Colors.navy, fontWeight: '500' },
+  link: { textAlign: 'center', marginTop: 10, fontSize: 13.5, color: Colors.textMid },
   linkBold: { color: Colors.navy, fontWeight: '600' },
 });

@@ -47,121 +47,122 @@ async def _run(url: str, profile: dict, submit: bool, override_values: list[dict
 
     form_type = _detect_form_type(url)
 
-    async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=True, args=_BROWSER_ARGS)
-        ctx = await browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            ),
-            viewport={"width": 1280, "height": 900},
-        )
-        page = await ctx.new_page()
+    try:
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(headless=True, args=_BROWSER_ARGS)
+            ctx = await browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                ),
+                viewport={"width": 1280, "height": 900},
+            )
+            page = await ctx.new_page()
 
-        try:
-            await page.goto(url, timeout=30000, wait_until="domcontentloaded")
-            await page.wait_for_timeout(2500)
+            try:
+                await page.goto(url, timeout=30000, wait_until="domcontentloaded")
+                await page.wait_for_timeout(2500)
 
-            gate = await _detect_gate(page)
-            if gate:
-                screenshot = base64.b64encode(await page.screenshot()).decode()
-                return {
-                    "status": "gate_detected",
-                    "gate_type": gate,
-                    "message": _gate_message(gate),
-                    "url": url,
-                    "screenshot": screenshot,
-                    "quick_answers": _build_quick_answers(profile, form_type),
-                }
-
-            # Handle multi-page forms — fill current page then continue
-            total_filled = 0
-            all_mapped: list[dict] = []
-            pages_filled = 0
-            max_pages = 5
-
-            while pages_filled < max_pages:
-                fields = await _extract_fields(page)
-
-                if not fields and pages_filled == 0:
+                gate = await _detect_gate(page)
+                if gate:
                     screenshot = base64.b64encode(await page.screenshot()).decode()
                     return {
-                        "status": "no_form",
-                        "message": "No application form was found on this page. It may require account creation first.",
+                        "status": "gate_detected",
+                        "gate_type": gate,
+                        "message": _gate_message(gate),
                         "url": url,
                         "screenshot": screenshot,
                         "quick_answers": _build_quick_answers(profile, form_type),
                     }
 
-                if not fields:
-                    break
+                total_filled = 0
+                all_mapped: list[dict] = []
+                pages_filled = 0
+                max_pages = 5
 
-                if override_values and pages_filled == 0:
-                    mapped = override_values
+                while pages_filled < max_pages:
+                    fields = await _extract_fields(page)
+
+                    if not fields and pages_filled == 0:
+                        screenshot = base64.b64encode(await page.screenshot()).decode()
+                        return {
+                            "status": "no_form",
+                            "message": "No application form was found on this page. It may require account creation first.",
+                            "url": url,
+                            "screenshot": screenshot,
+                            "quick_answers": _build_quick_answers(profile, form_type),
+                        }
+
+                    if not fields:
+                        break
+
+                    if override_values and pages_filled == 0:
+                        mapped = override_values
+                    else:
+                        screenshot_b64 = base64.b64encode(await page.screenshot()).decode()
+                        mapped = _claude_map(fields, profile, screenshot_b64, form_type)
+
+                    filled_count = await _fill(page, mapped)
+                    total_filled += filled_count
+                    all_mapped.extend(mapped)
+                    pages_filled += 1
+
+                    if not submit:
+                        break
+                    next_btn = await _find_next_button(page)
+                    if not next_btn:
+                        break
+                    try:
+                        await next_btn.click(timeout=5000)
+                        await page.wait_for_timeout(2000)
+                    except Exception:
+                        break
+
+                if submit:
+                    submitted, conf_screenshot = await _submit_form(page)
+                    return {
+                        "status": "submitted" if submitted else "submit_failed",
+                        "fields_filled": total_filled,
+                        "pages_filled": pages_filled,
+                        "screenshot": conf_screenshot,
+                        "message": "Application submitted successfully!" if submitted else "Could not click submit — please complete manually.",
+                    }
                 else:
-                    screenshot_b64 = base64.b64encode(await page.screenshot()).decode()
-                    mapped = _claude_map(fields, profile, screenshot_b64, form_type)
+                    screenshot = base64.b64encode(await page.screenshot(full_page=True)).decode()
+                    seen_ids: set = set()
+                    unique_mapped = []
+                    for fv in all_mapped:
+                        key = fv.get("id") or fv.get("name")
+                        if key and key not in seen_ids:
+                            seen_ids.add(key)
+                            unique_mapped.append(fv)
+                    return {
+                        "status": "ready_for_review",
+                        "url": url,
+                        "form_type": form_type,
+                        "fields_found": len(fields) if fields else 0,
+                        "fields_filled": total_filled,
+                        "filled_values": unique_mapped,
+                        "screenshot": screenshot,
+                    }
 
-                filled_count = await _fill(page, mapped)
-                total_filled += filled_count
-                all_mapped.extend(mapped)
-                pages_filled += 1
-
-                # Check for a "Next" or "Continue" button (multi-page form)
-                if not submit:
-                    break  # Preview mode: only fill first page
-                next_btn = await _find_next_button(page)
-                if not next_btn:
-                    break
+            except Exception as exc:
                 try:
-                    await next_btn.click(timeout=5000)
-                    await page.wait_for_timeout(2000)
+                    screenshot = base64.b64encode(await page.screenshot()).decode()
                 except Exception:
-                    break
-
-            if submit:
-                submitted, conf_screenshot = await _submit_form(page)
+                    screenshot = ""
                 return {
-                    "status": "submitted" if submitted else "submit_failed",
-                    "fields_filled": total_filled,
-                    "pages_filled": pages_filled,
-                    "screenshot": conf_screenshot,
-                    "message": "Application submitted successfully!" if submitted else "Could not click submit — please complete manually.",
-                }
-            else:
-                screenshot = base64.b64encode(await page.screenshot(full_page=True)).decode()
-                # Deduplicate mapped fields
-                seen_ids = set()
-                unique_mapped = []
-                for fv in all_mapped:
-                    key = fv.get("id") or fv.get("name")
-                    if key and key not in seen_ids:
-                        seen_ids.add(key)
-                        unique_mapped.append(fv)
-                return {
-                    "status": "ready_for_review",
+                    "status": "error",
+                    "error": str(exc),
                     "url": url,
-                    "form_type": form_type,
-                    "fields_found": len(fields) if fields else 0,
-                    "fields_filled": total_filled,
-                    "filled_values": unique_mapped,
                     "screenshot": screenshot,
+                    "quick_answers": _build_quick_answers(profile, form_type),
                 }
+            finally:
+                await browser.close()
 
-        except Exception as exc:
-            try:
-                screenshot = base64.b64encode(await page.screenshot()).decode()
-            except Exception:
-                screenshot = ""
-            return {
-                "status": "error",
-                "error": str(exc),
-                "url": url,
-                "screenshot": screenshot,
-                "quick_answers": _build_quick_answers(profile, form_type),
-            }
-        finally:
-            await browser.close()
+    except Exception:
+        return _fallback_no_playwright(url, profile)
 
 
 # ─── Form Type Detection ──────────────────────────────────────────────────────

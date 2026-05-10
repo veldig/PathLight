@@ -3,7 +3,6 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -18,10 +17,13 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
   const router = useRouter();
 
   async function signUp() {
     setLoading(true);
+    setError('');
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -29,15 +31,29 @@ export default function RegisterScreen() {
     });
     setLoading(false);
     if (error) {
-      console.error('[signUp] error:', error.message);
-      Alert.alert('Sign up failed', error.message);
+      setError(error.message);
     } else if (!data.session) {
-      console.warn('[signUp] no session — email confirmation required');
-      Alert.alert('Check your email', 'We sent you a confirmation link. Click it to activate your account, then sign in.');
+      setSuccess(true);
     } else {
-      console.log('[signUp] success, navigating to onboarding');
       router.replace('/(auth)/onboarding');
     }
+  }
+
+  if (success) {
+    return (
+      <View style={[styles.container, { alignItems: 'center' }]}>
+        <View style={styles.card}>
+          <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>📬</Text>
+          <Text style={[styles.title, { textAlign: 'center' }]}>Check your email</Text>
+          <Text style={[styles.sub, { textAlign: 'center' }]}>
+            We sent a confirmation link to <Text style={{ fontWeight: '700' }}>{email}</Text>. Click it to activate your account, then sign in.
+          </Text>
+          <TouchableOpacity style={styles.btn} onPress={() => router.replace('/(auth)/login')}>
+            <Text style={styles.btnText}>Go to Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -49,11 +65,13 @@ export default function RegisterScreen() {
         <Text style={styles.title}>Create your account</Text>
         <Text style={styles.sub}>PathLight will build a personalized plan for you.</Text>
 
+        {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
+
         <TextInput style={styles.input} placeholder="Full name" placeholderTextColor={Colors.textLight} value={name} onChangeText={setName} />
         <TextInput style={styles.input} placeholder="Email" placeholderTextColor={Colors.textLight} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
         <TextInput style={styles.input} placeholder="Password" placeholderTextColor={Colors.textLight} value={password} onChangeText={setPassword} secureTextEntry />
 
-        <TouchableOpacity style={styles.btn} onPress={signUp} disabled={loading}>
+        <TouchableOpacity style={[styles.btn, loading && { opacity: 0.7 }]} onPress={signUp} disabled={loading}>
           <Text style={styles.btnText}>{loading ? 'Creating account…' : 'Get Started'}</Text>
         </TouchableOpacity>
 
@@ -79,4 +97,6 @@ const styles = StyleSheet.create({
   btnText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
   link: { textAlign: 'center', marginTop: 18, fontSize: 13.5, color: Colors.textMid },
   linkBold: { color: Colors.navy, fontWeight: '600' },
+  errorBox: { backgroundColor: '#fde8e8', borderRadius: Radius.md, padding: 12, marginBottom: 14 },
+  errorText: { color: '#c0392b', fontSize: 13, textAlign: 'center' },
 });

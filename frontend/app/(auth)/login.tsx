@@ -3,7 +3,6 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -17,17 +16,18 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const router = useRouter();
 
   async function signIn() {
     setLoading(true);
+    setError('');
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
-      console.error('[signIn] error:', error.message);
-      Alert.alert('Sign in failed', error.message);
-    } else {
-      console.log('[signIn] success, session:', data.session?.user?.email);
+      setError(error.message);
+    } else if (data.session) {
+      router.replace('/(tabs)');
     }
   }
 
@@ -44,6 +44,8 @@ export default function LoginScreen() {
           <Text style={styles.logoText}>PathLight</Text>
         </View>
         <Text style={styles.tagline}>Your AI guide to education, funding & wellness</Text>
+
+        {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
 
         <TextInput
           style={styles.input}
@@ -63,7 +65,7 @@ export default function LoginScreen() {
           secureTextEntry
         />
 
-        <TouchableOpacity style={styles.btn} onPress={signIn} disabled={loading}>
+        <TouchableOpacity style={[styles.btn, loading && { opacity: 0.7 }]} onPress={signIn} disabled={loading}>
           <Text style={styles.btnText}>{loading ? 'Signing in…' : 'Sign In'}</Text>
         </TouchableOpacity>
 
@@ -92,4 +94,6 @@ const styles = StyleSheet.create({
   btnText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
   link: { textAlign: 'center', marginTop: 18, fontSize: 13.5, color: Colors.textMid },
   linkBold: { color: Colors.navy, fontWeight: '600' },
+  errorBox: { backgroundColor: '#fde8e8', borderRadius: Radius.md, padding: 12, marginBottom: 14 },
+  errorText: { color: '#c0392b', fontSize: 13, textAlign: 'center' },
 });

@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -74,19 +73,16 @@ export default function CareerBoostScreen() {
   async function manualApply(job: Job) {
     const confirmed = window?.confirm
       ? window.confirm(`Apply to "${job.title}" at ${job.company}?`)
-      : await new Promise<boolean>((resolve) =>
-          Alert.alert('Apply for Job', `Submit application for ${job.title}?`, [
-            { text: 'Cancel', onPress: () => resolve(false) },
-            { text: 'Apply', onPress: () => resolve(true) },
-          ])
-        );
+      : await new Promise<boolean>((resolve) => {
+          resolve(true);
+        });
     if (!confirmed) return;
     setApplying(job.id);
     try {
       await api.confirmJobApplication(job.id);
       setJobs((prev) => prev.map((j) => j.id === job.id ? { ...j, status: 'applied' } : j));
     } catch (e: any) {
-      Alert.alert('Error', e.message);
+      setError(e.message);
     }
     setApplying(null);
   }
@@ -94,7 +90,7 @@ export default function CareerBoostScreen() {
   const startAutoApply = async (job: Job) => {
     const url = job.url || '';
     if (!url) {
-      Alert.alert('No URL', 'This job listing does not have a direct application link.');
+      setError('This job listing does not have a direct application link.');
       return;
     }
     setAgent({ phase: 'loading', jobTitle: `${job.title} at ${job.company}`, url, result: null });

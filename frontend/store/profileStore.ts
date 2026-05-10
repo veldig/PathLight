@@ -18,6 +18,8 @@ export const useProfileStore = create<ProfileState>((set) => ({
     try {
       const profile = await fetchProfile();
       set({ profile });
+    } catch (e) {
+      console.error('[profileStore] load failed:', e);
     } finally {
       set({ loading: false });
     }

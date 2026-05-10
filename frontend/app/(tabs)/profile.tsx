@@ -30,7 +30,19 @@ export default function ProfileScreen() {
   useEffect(() => { load(); }, []);
 
   function startEdit() {
-    setDraft(profile ? { ...profile } : null);
+    setDraft(profile ? { ...profile } : {
+      id: user?.id ?? '',
+      name: '',
+      state: '',
+      income_bracket: '',
+      family_size: 0,
+      child_ages: [],
+      education_level: '',
+      field_of_study: '',
+      skills: [],
+      hours_per_week: 0,
+      childcare_needed: false,
+    });
     setEditing(true);
   }
 
@@ -297,7 +309,6 @@ function ChipPicker({ label, value, options, onSelect }: {
 }
 
 function ChangePasswordModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
@@ -311,7 +322,7 @@ function ChangePasswordModal({ visible, onClose }: { visible: boolean; onClose: 
     try {
       await changePassword(next);
       Alert.alert('Password updated', 'Your password has been changed successfully.');
-      setCurrent(''); setNext(''); setConfirm('');
+      setNext(''); setConfirm('');
       onClose();
     } catch (e: any) {
       setError(e.message);
@@ -374,7 +385,6 @@ const styles = StyleSheet.create({
   avatarSection: { alignItems: 'center', paddingVertical: 28 },
   avatar: {
     width: 80, height: 80, borderRadius: 40,
-    background: 'linear-gradient(135deg, #8FAF9A, #D88C7A)',
     backgroundColor: Colors.navy,
     alignItems: 'center', justifyContent: 'center', marginBottom: 12,
   },

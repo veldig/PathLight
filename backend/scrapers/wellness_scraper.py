@@ -3,7 +3,7 @@ WellnessGuide scraper: curated mental health and parenting support resources.
 Embeds and upserts into the Supabase `wellness_resources` table.
 """
 import uuid
-from lib.supabase_client import get_supabase
+from lib.mongo_client import get_mongo
 from ml.embeddings import embed_batch
 
 RESOURCES = [
@@ -168,31 +168,28 @@ def _embed_text(r: dict) -> str:
 
 
 def run(force: bool = False) -> int:
-    try:
-        sb = get_supabase()
-        if not force:
-            existing = sb.table("wellness_resources").select("id", count="exact").execute()
-            if (existing.count or 0) >= 5:
-                return 0
+    db = get_mongo()
+    if not force:
+        if db["wellness_resources"].count_documents({}) >= 5:
+            return 0
 
-        texts = [_embed_text(r) for r in RESOURCES]
-        embeddings = embed_batch(texts) or [None] * len(RESOURCES)
+    texts = [_embed_text(r) for r in RESOURCES]
+    embeddings = embed_batch(texts) or [None] * len(RESOURCES)
 
-        rows = [
-            {
-                "id": str(uuid.uuid4()),
-                "name": r["name"],
-                "type": r.get("type", ""),
-                "description": r.get("description", ""),
-                "contact": r.get("contact", ""),
-                "url": r.get("url", ""),
-                "state": r.get("state"),
-                "embedding": embeddings[i],
-            }
-            for i, r in enumerate(RESOURCES)
-        ]
+    rows = [
+        {
+            "id": str(uuid.uuid4()),
+            "name": r["name"],
+            "type": r.get("type", ""),
+            "description": r.get("description", ""),
+            "contact": r.get("contact", ""),
+            "url": r.get("url", ""),
+            "state": r.get("state"),
+            "embedding": embeddings[i],
+        }
+        for i, r in enumerate(RESOURCES)
+    ]
 
-        sb.table("wellness_resources").upsert(rows).execute()
-        return len(rows)
-    except Exception:
-        return 0  # table doesn't exist yet — ml_schema.sql needs to be run
+    for row in rows:
+        db["wellness_resources"].update_one({"name": row["name"]}, {"$set": row}, upsert=True)
+    return len(rows)

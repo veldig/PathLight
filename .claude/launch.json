@@ -1,0 +1,33 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "PathLight Backend",
+      "runtimeExecutable": "/opt/homebrew/bin/python3.13",
+      "runtimeArgs": ["-m", "uvicorn", "main:app", "--loop", "asyncio", "--http", "h11", "--host", "0.0.0.0", "--port", "8000"],
+      "cwd": "/Users/martin/Desktop/PathLight/backend",
+      "port": 8000
+    },
+    {
+      "name": "PathLight Frontend (Expo)",
+      "runtimeExecutable": "/opt/homebrew/opt/node@20/bin/npx",
+      "runtimeArgs": ["expo", "start", "--web"],
+      "cwd": "/Users/martin/Desktop/PathLight/frontend",
+      "port": 8081
+    },
+    {
+      "name": "EduPath Demo",
+      "runtimeExecutable": "/opt/homebrew/opt/node@20/bin/npx",
+      "runtimeArgs": ["serve", "-l", "3333", "."],
+      "cwd": "/Users/martin/Desktop/PathLight/edupath-demo",
+      "port": 3333
+    },
+    {
+      "name": "Study Companion",
+      "runtimeExecutable": "/opt/homebrew/opt/node@20/bin/npx",
+      "runtimeArgs": ["serve", "-l", "3334", "."],
+      "cwd": "/Users/martin/Desktop/PathLight/study-companion",
+      "port": 3334
+    }
+  ]
+}

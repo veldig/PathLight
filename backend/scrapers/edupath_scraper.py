@@ -4,7 +4,7 @@ Embeds and upserts into the Supabase `courses` table.
 """
 import uuid
 import httpx
-from lib.supabase_client import get_supabase
+from lib.mongo_client import get_mongo
 from ml.embeddings import embed_batch
 
 CURATED = [
@@ -178,17 +178,9 @@ def _embed_text(c: dict) -> str:
 
 
 def run(force: bool = False) -> int:
-    try:
-        return _run(force)
-    except Exception:
-        return 0
-
-
-def _run(force: bool = False) -> int:
-    sb = get_supabase()
+    db = get_mongo()
     if not force:
-        existing = sb.table("courses").select("id", count="exact").execute()
-        if (existing.count or 0) >= 5:
+        if db["courses"].count_documents({}) >= 5:
             return 0
 
     all_courses = CURATED.copy()
@@ -213,7 +205,8 @@ def _run(force: bool = False) -> int:
         for i, c in enumerate(all_courses)
     ]
 
-    sb.table("courses").upsert(rows).execute()
+    for row in rows:
+        db["courses"].update_one({"name": row["name"]}, {"$set": row}, upsert=True)
     return len(rows)
 
 

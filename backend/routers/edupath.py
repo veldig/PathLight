@@ -2,7 +2,7 @@ import os
 from fastapi import APIRouter, Depends
 from anthropic import Anthropic
 from middleware.auth import get_current_user_id
-from lib.supabase_client import get_supabase
+from lib.mongo_client import get_mongo
 from ml.matcher import match_courses, table_is_empty
 
 router = APIRouter()
@@ -11,8 +11,10 @@ client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
 @router.post("/analyze")
 def analyze(user_id: str = Depends(get_current_user_id)):
-    sb = get_supabase()
-    profile = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute().data or {}
+    db = get_mongo()
+    profile = db["profiles"].find_one({"_id": user_id}) or {}
+    if profile:
+        profile["id"] = profile.pop("_id", user_id)
 
     if table_is_empty("courses"):
         from scrapers import edupath_scraper
@@ -65,6 +67,8 @@ def analyze(user_id: str = Depends(get_current_user_id)):
 
 @router.get("/plan")
 def get_plan(user_id: str = Depends(get_current_user_id)):
-    sb = get_supabase()
-    result = sb.table("education_plans").select("*").eq("id", user_id).maybe_single().execute()
-    return {"plan": result.data}
+    db = get_mongo()
+    result = db["education_plans"].find_one({"_id": user_id})
+    if result:
+        result["id"] = result.pop("_id")
+    return {"plan": result}

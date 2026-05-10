@@ -1,4 +1,6 @@
-import { supabase } from './supabase';
+import { getStoredToken, clearAuthData } from './supabase';
+
+const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
 
 export interface Profile {
   id: string;
@@ -15,48 +17,40 @@ export interface Profile {
   updated_at?: string;
 }
 
+export async function getAccessToken(): Promise<string | null> {
+  return getStoredToken();
+}
+
+async function authedFetch(path: string, options?: RequestInit) {
+  const token = await getStoredToken();
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options?.headers ?? {}),
+    },
+    ...options,
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
 export async function fetchProfile(): Promise<Profile | null> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  if (error) throw new Error(error.message);
-  return data;
+  try {
+    return await authedFetch('/profile');
+  } catch {
+    return null;
+  }
 }
 
 export async function upsertProfile(updates: Partial<Omit<Profile, 'id'>>): Promise<Profile> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-
-  const { data, error } = await supabase
-    .from('profiles')
-    .upsert(
-      { ...updates, id: user.id, updated_at: new Date().toISOString() },
-      { onConflict: 'id' },
-    )
-    .select()
-    .single();
-
-  if (error) throw new Error(error.message);
-  return data;
-}
-
-export async function changePassword(newPassword: string): Promise<void> {
-  const { error } = await supabase.auth.updateUser({ password: newPassword });
-  if (error) throw new Error(error.message);
+  return authedFetch('/profile', { method: 'PUT', body: JSON.stringify(updates) });
 }
 
 export async function signOut(): Promise<void> {
-  const { error } = await supabase.auth.signOut();
-  if (error) throw new Error(error.message);
+  await clearAuthData();
 }
 
-export async function getAccessToken(): Promise<string | null> {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
+export async function changePassword(_newPassword: string): Promise<void> {
+  throw new Error('Change password not supported yet');
 }

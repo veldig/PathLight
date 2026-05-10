@@ -19,7 +19,7 @@ const AGENTS = [
     color: '#C08A3A',
     bgColor: '#fdf3e3',
     action: 'Start Session',
-    route: '/agents/edupath',
+    route: '/agents/focuspath',
   },
   {
     id: 'fundfinder',

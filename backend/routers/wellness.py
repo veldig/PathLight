@@ -3,7 +3,8 @@ from datetime import date
 from fastapi import APIRouter, Depends
 from anthropic import Anthropic
 from middleware.auth import get_current_user_id
-from lib.supabase_client import get_supabase
+from lib.mongo_client import get_mongo
+from ml.matcher import match_wellness_resources, table_is_empty
 
 router = APIRouter()
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
@@ -11,61 +12,42 @@ client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
 @router.post("/checkin")
 def start_checkin(user_id: str = Depends(get_current_user_id)):
-    sb = get_supabase()
+    db = get_mongo()
+
+    streak_doc = db["wellness_streaks"].find_one({"_id": user_id}) or {}
+    last_checkin = streak_doc.get("last_checkin")
+    current_streak = streak_doc.get("current_streak", 0)
+
     today = date.today().isoformat()
+    if last_checkin == today:
+        new_streak = current_streak
+    elif last_checkin and (date.today() - date.fromisoformat(last_checkin)).days == 1:
+        new_streak = current_streak + 1
+    else:
+        new_streak = 1
 
-    # ── User profile ──────────────────────────────────────────────────────────
-    profile = {}
-    try:
-        profile = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute().data or {}
-    except Exception:
-        pass
+    db["wellness_streaks"].update_one(
+        {"_id": user_id},
+        {"$set": {"current_streak": new_streak, "last_checkin": today}},
+        upsert=True,
+    )
 
-    # ── Streak tracking (graceful — table may not exist yet) ──────────────────
-    new_streak = 1
-    try:
-        streak_data = (
-            sb.table("wellness_streaks")
-            .select("*")
-            .eq("user_id", user_id)
-            .maybe_single()
-            .execute()
-            .data or {}
-        )
-        last_checkin = streak_data.get("last_checkin")
-        current_streak = streak_data.get("current_streak", 0)
+    if table_is_empty("wellness_resources"):
+        from scrapers import wellness_scraper
+        wellness_scraper.run()
 
-        if last_checkin == today:
-            new_streak = current_streak
-        elif last_checkin and (date.today() - date.fromisoformat(last_checkin)).days == 1:
-            new_streak = current_streak + 1
+    profile = db["profiles"].find_one({"_id": user_id}) or {}
+    if profile:
+        profile["id"] = profile.pop("_id", user_id)
+    matched_resources = match_wellness_resources(profile, limit=3)
 
-        sb.table("wellness_streaks").upsert(
-            {"user_id": user_id, "current_streak": new_streak, "last_checkin": today},
-            on_conflict="user_id",
-        ).execute()
-    except Exception:
-        pass  # streak defaults to 1 if table missing
-
-    # ── ML resource matching (graceful — tables may not exist yet) ────────────
-    matched_resources = []
-    try:
-        from ml.matcher import match_wellness_resources, table_is_empty
-        if table_is_empty("wellness_resources"):
-            from scrapers import wellness_scraper
-            wellness_scraper.run()
-        matched_resources = match_wellness_resources(profile, limit=3)
-    except Exception:
-        pass  # resources stay empty — fallback shown in frontend
-
-    # ── Claude check-in message ───────────────────────────────────────────────
     resource_context = ""
     if matched_resources:
-        lines = "\n".join(
+        resource_lines = "\n".join(
             f"- {r['name']} ({r.get('type', '')}): {r.get('contact', '')} — {(r.get('description') or '')[:120]}"
             for r in matched_resources
         )
-        resource_context = f"\n\nReal support resources matched for this user:\n{lines}"
+        resource_context = f"\n\nReal support resources matched for this user:\n{resource_lines}"
 
     response = client.messages.create(
         model="claude-sonnet-4-6",
@@ -91,16 +73,9 @@ def start_checkin(user_id: str = Depends(get_current_user_id)):
 
 @router.get("/history")
 def get_history(user_id: str = Depends(get_current_user_id)):
-    sb = get_supabase()
-    checkins = []
-    streak = 0
-    try:
-        checkins = sb.table("wellness_checkins").select("*").eq("user_id", user_id).order("created_at", desc=True).limit(30).execute().data or []
-    except Exception:
-        pass
-    try:
-        result = sb.table("wellness_streaks").select("*").eq("user_id", user_id).maybe_single().execute()
-        streak = (result.data or {}).get("current_streak", 0)
-    except Exception:
-        pass
-    return {"checkins": checkins, "current_streak": streak}
+    db = get_mongo()
+    checkins = list(db["wellness_checkins"].find({"user_id": user_id}).sort("created_at", -1).limit(30))
+    for c in checkins:
+        c["id"] = str(c.pop("_id"))
+    streak_doc = db["wellness_streaks"].find_one({"_id": user_id}) or {}
+    return {"checkins": checkins, "current_streak": streak_doc.get("current_streak", 0)}

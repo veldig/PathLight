@@ -2,12 +2,10 @@ import { Colors, Radius, Shadow } from '@/constants/theme';
 import { saveAuthData } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
-import { useEffect } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -15,6 +13,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -27,6 +26,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [error, setError] = useState('');
   const router = useRouter();
 
   const [request, response, promptAsync] = Google.useAuthRequest({
@@ -40,11 +40,14 @@ export default function LoginScreen() {
       if (authentication?.accessToken) {
         handleGoogleToken(authentication.accessToken);
       }
+    } else if (response?.type === 'error') {
+      setError('Google sign in failed. Please try again.');
     }
   }, [response]);
 
   async function handleGoogleToken(accessToken: string) {
     setGoogleLoading(true);
+    setError('');
     try {
       const res = await fetch(`${API_BASE}/auth/google`, {
         method: 'POST',
@@ -53,35 +56,42 @@ export default function LoginScreen() {
       });
       const data = await res.json();
       if (!res.ok) {
-        Alert.alert('Google sign in failed', data.detail ?? 'Unknown error');
+        setError(data.detail ?? 'Google sign in failed');
         return;
       }
       await saveAuthData(data.token, { id: data.user_id, email: data.email });
       useAuthStore.getState().setAuth(data.token, { id: data.user_id, email: data.email });
+      router.replace('/(tabs)');
     } catch (e: any) {
-      Alert.alert('Google sign in failed', e.message);
+      setError(e.message ?? 'Connection error. Check your network.');
     } finally {
       setGoogleLoading(false);
     }
   }
 
   async function signIn() {
+    if (!email.trim() || !password) {
+      setError('Please enter your email and password.');
+      return;
+    }
     setLoading(true);
+    setError('');
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
       const data = await res.json();
       if (!res.ok) {
-        Alert.alert('Sign in failed', data.detail ?? 'Unknown error');
+        setError(data.detail ?? 'Sign in failed. Check your credentials.');
         return;
       }
       await saveAuthData(data.token, { id: data.user_id, email: data.email });
       useAuthStore.getState().setAuth(data.token, { id: data.user_id, email: data.email });
+      router.replace('/(tabs)');
     } catch (e: any) {
-      Alert.alert('Sign in failed', e.message);
+      setError(e.message ?? 'Connection error. Is the server running?');
     } finally {
       setLoading(false);
     }
@@ -101,13 +111,15 @@ export default function LoginScreen() {
         </View>
         <Text style={styles.tagline}>Your AI guide to education, funding & wellness</Text>
 
-        {/* Google Sign In */}
         <TouchableOpacity
-          style={styles.googleBtn}
-          onPress={() => promptAsync()}
+          style={[styles.googleBtn, (googleLoading || !request) && styles.btnDisabled]}
+          onPress={() => { setError(''); promptAsync(); }}
           disabled={!request || googleLoading}
         >
-          <Text style={styles.googleIcon}>G</Text>
+          {googleLoading
+            ? <ActivityIndicator size="small" color={Colors.textMid} />
+            : <Text style={styles.googleIcon}>G</Text>
+          }
           <Text style={styles.googleBtnText}>
             {googleLoading ? 'Signing in…' : 'Continue with Google'}
           </Text>
@@ -124,21 +136,36 @@ export default function LoginScreen() {
           placeholder="Email"
           placeholderTextColor={Colors.textLight}
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(t) => { setEmail(t); setError(''); }}
           autoCapitalize="none"
           keyboardType="email-address"
+          autoComplete="email"
         />
         <TextInput
           style={styles.input}
           placeholder="Password"
           placeholderTextColor={Colors.textLight}
           value={password}
-          onChangeText={setPassword}
+          onChangeText={(t) => { setPassword(t); setError(''); }}
           secureTextEntry
+          autoComplete="current-password"
         />
 
-        <TouchableOpacity style={styles.btn} onPress={signIn} disabled={loading}>
-          <Text style={styles.btnText}>{loading ? 'Signing in…' : 'Sign In'}</Text>
+        {error ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
+        <TouchableOpacity
+          style={[styles.btn, loading && styles.btnDisabled]}
+          onPress={signIn}
+          disabled={loading}
+        >
+          {loading
+            ? <ActivityIndicator size="small" color={Colors.white} />
+            : <Text style={styles.btnText}>Sign In</Text>
+          }
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')}>
@@ -146,7 +173,9 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-          <Text style={styles.link}>Don't have an account? <Text style={styles.linkBold}>Sign up</Text></Text>
+          <Text style={styles.link}>
+            Don't have an account? <Text style={styles.linkBold}>Sign up</Text>
+          </Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -176,7 +205,13 @@ const styles = StyleSheet.create({
     padding: 14, fontSize: 15, color: Colors.textDark,
     backgroundColor: Colors.cream, marginBottom: 14,
   },
+  errorBox: {
+    backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca',
+    borderRadius: Radius.sm, padding: 12, marginBottom: 12,
+  },
+  errorText: { color: '#dc2626', fontSize: 13.5, textAlign: 'center' },
   btn: { backgroundColor: Colors.navy, borderRadius: Radius.md, padding: 16, alignItems: 'center', marginTop: 4 },
+  btnDisabled: { opacity: 0.6 },
   btnText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
   forgotLink: { textAlign: 'center', marginTop: 12, fontSize: 13.5, color: Colors.navy, fontWeight: '500' },
   link: { textAlign: 'center', marginTop: 10, fontSize: 13.5, color: Colors.textMid },

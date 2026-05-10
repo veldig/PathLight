@@ -6,7 +6,6 @@ import { useState, useEffect } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -14,6 +13,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -27,6 +27,7 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [error, setError] = useState('');
   const router = useRouter();
 
   const [request, response, promptAsync] = Google.useAuthRequest({
@@ -40,11 +41,14 @@ export default function RegisterScreen() {
       if (authentication?.accessToken) {
         handleGoogleToken(authentication.accessToken);
       }
+    } else if (response?.type === 'error') {
+      setError('Google sign in failed. Please try again.');
     }
   }, [response]);
 
   async function handleGoogleToken(accessToken: string) {
     setGoogleLoading(true);
+    setError('');
     try {
       const res = await fetch(`${API_BASE}/auth/google`, {
         method: 'POST',
@@ -53,37 +57,42 @@ export default function RegisterScreen() {
       });
       const data = await res.json();
       if (!res.ok) {
-        Alert.alert('Google sign in failed', data.detail ?? 'Unknown error');
+        setError(data.detail ?? 'Google sign in failed');
         return;
       }
       await saveAuthData(data.token, { id: data.user_id, email: data.email });
       useAuthStore.getState().setAuth(data.token, { id: data.user_id, email: data.email });
       router.replace('/(auth)/onboarding');
     } catch (e: any) {
-      Alert.alert('Google sign in failed', e.message);
+      setError(e.message ?? 'Connection error. Check your network.');
     } finally {
       setGoogleLoading(false);
     }
   }
 
   async function signUp() {
+    if (!name.trim()) { setError('Please enter your name.'); return; }
+    if (!email.trim()) { setError('Please enter your email.'); return; }
+    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+
     setLoading(true);
+    setError('');
     try {
       const res = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password, name: name.trim() }),
       });
       const data = await res.json();
       if (!res.ok) {
-        Alert.alert('Sign up failed', data.detail ?? 'Unknown error');
+        setError(data.detail ?? 'Sign up failed. Please try again.');
         return;
       }
       await saveAuthData(data.token, { id: data.user_id, email: data.email });
       useAuthStore.getState().setAuth(data.token, { id: data.user_id, email: data.email });
       router.replace('/(auth)/onboarding');
     } catch (e: any) {
-      Alert.alert('Sign up failed', e.message);
+      setError(e.message ?? 'Connection error. Is the server running?');
     } finally {
       setLoading(false);
     }
@@ -98,13 +107,15 @@ export default function RegisterScreen() {
         <Text style={styles.title}>Create your account</Text>
         <Text style={styles.sub}>PathLight will build a personalized plan for you.</Text>
 
-        {/* Google Sign Up */}
         <TouchableOpacity
-          style={styles.googleBtn}
-          onPress={() => promptAsync()}
+          style={[styles.googleBtn, (googleLoading || !request) && styles.btnDisabled]}
+          onPress={() => { setError(''); promptAsync(); }}
           disabled={!request || googleLoading}
         >
-          <Text style={styles.googleIcon}>G</Text>
+          {googleLoading
+            ? <ActivityIndicator size="small" color={Colors.textMid} />
+            : <Text style={styles.googleIcon}>G</Text>
+          }
           <Text style={styles.googleBtnText}>
             {googleLoading ? 'Signing in…' : 'Continue with Google'}
           </Text>
@@ -116,16 +127,55 @@ export default function RegisterScreen() {
           <View style={styles.dividerLine} />
         </View>
 
-        <TextInput style={styles.input} placeholder="Full name" placeholderTextColor={Colors.textLight} value={name} onChangeText={setName} />
-        <TextInput style={styles.input} placeholder="Email" placeholderTextColor={Colors.textLight} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-        <TextInput style={styles.input} placeholder="Password" placeholderTextColor={Colors.textLight} value={password} onChangeText={setPassword} secureTextEntry />
+        <TextInput
+          style={styles.input}
+          placeholder="Full name"
+          placeholderTextColor={Colors.textLight}
+          value={name}
+          onChangeText={(t) => { setName(t); setError(''); }}
+          autoComplete="name"
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          placeholderTextColor={Colors.textLight}
+          value={email}
+          onChangeText={(t) => { setEmail(t); setError(''); }}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          autoComplete="email"
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Password (min 6 characters)"
+          placeholderTextColor={Colors.textLight}
+          value={password}
+          onChangeText={(t) => { setPassword(t); setError(''); }}
+          secureTextEntry
+          autoComplete="new-password"
+        />
 
-        <TouchableOpacity style={styles.btn} onPress={signUp} disabled={loading}>
-          <Text style={styles.btnText}>{loading ? 'Creating account…' : 'Get Started'}</Text>
+        {error ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
+        <TouchableOpacity
+          style={[styles.btn, loading && styles.btnDisabled]}
+          onPress={signUp}
+          disabled={loading}
+        >
+          {loading
+            ? <ActivityIndicator size="small" color={Colors.white} />
+            : <Text style={styles.btnText}>Get Started</Text>
+          }
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.link}>Already have an account? <Text style={styles.linkBold}>Sign in</Text></Text>
+          <Text style={styles.link}>
+            Already have an account? <Text style={styles.linkBold}>Sign in</Text>
+          </Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -152,7 +202,13 @@ const styles = StyleSheet.create({
     padding: 14, fontSize: 15, color: Colors.textDark,
     backgroundColor: Colors.cream, marginBottom: 14,
   },
+  errorBox: {
+    backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca',
+    borderRadius: Radius.sm, padding: 12, marginBottom: 12,
+  },
+  errorText: { color: '#dc2626', fontSize: 13.5, textAlign: 'center' },
   btn: { backgroundColor: Colors.navy, borderRadius: Radius.md, padding: 16, alignItems: 'center', marginTop: 4 },
+  btnDisabled: { opacity: 0.6 },
   btnText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
   link: { textAlign: 'center', marginTop: 18, fontSize: 13.5, color: Colors.textMid },
   linkBold: { color: Colors.navy, fontWeight: '600' },

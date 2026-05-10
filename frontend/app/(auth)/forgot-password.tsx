@@ -2,7 +2,7 @@ import { Colors, Radius, Shadow } from '@/constants/theme';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  Alert,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -19,19 +19,22 @@ export default function ForgotPasswordScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
   const router = useRouter();
 
   async function handleReset() {
+    setError('');
     if (!email || !newPassword || !confirmPassword) {
-      Alert.alert('Missing fields', 'Please fill in all fields.');
+      setError('Please fill in all fields.');
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert('Passwords do not match', 'Make sure both passwords are the same.');
+      setError('Passwords do not match.');
       return;
     }
     if (newPassword.length < 6) {
-      Alert.alert('Password too short', 'Password must be at least 6 characters.');
+      setError('Password must be at least 6 characters.');
       return;
     }
 
@@ -40,21 +43,34 @@ export default function ForgotPasswordScreen() {
       const res = await fetch(`${API_BASE}/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, new_password: newPassword }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), new_password: newPassword }),
       });
       const data = await res.json();
       if (!res.ok) {
-        Alert.alert('Reset failed', data.detail ?? 'Unknown error');
+        setError(data.detail ?? 'Reset failed. Check your email address.');
         return;
       }
-      Alert.alert('Password updated!', 'You can now sign in with your new password.', [
-        { text: 'Sign In', onPress: () => router.replace('/(auth)/login') },
-      ]);
+      setSuccess(true);
     } catch (e: any) {
-      Alert.alert('Reset failed', e.message);
+      setError(e.message ?? 'Connection error.');
     } finally {
       setLoading(false);
     }
+  }
+
+  if (success) {
+    return (
+      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.card}>
+          <Text style={styles.successEmoji}>✅</Text>
+          <Text style={styles.title}>Password Updated!</Text>
+          <Text style={styles.sub}>You can now sign in with your new password.</Text>
+          <TouchableOpacity style={styles.btn} onPress={() => router.replace('/(auth)/login')}>
+            <Text style={styles.btnText}>Go to Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    );
   }
 
   return (
@@ -71,29 +87,44 @@ export default function ForgotPasswordScreen() {
           placeholder="Email"
           placeholderTextColor={Colors.textLight}
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(t) => { setEmail(t); setError(''); }}
           autoCapitalize="none"
           keyboardType="email-address"
+          autoComplete="email"
         />
         <TextInput
           style={styles.input}
           placeholder="New Password"
           placeholderTextColor={Colors.textLight}
           value={newPassword}
-          onChangeText={setNewPassword}
+          onChangeText={(t) => { setNewPassword(t); setError(''); }}
           secureTextEntry
+          autoComplete="new-password"
         />
         <TextInput
           style={styles.input}
           placeholder="Confirm New Password"
           placeholderTextColor={Colors.textLight}
           value={confirmPassword}
-          onChangeText={setConfirmPassword}
+          onChangeText={(t) => { setConfirmPassword(t); setError(''); }}
           secureTextEntry
         />
 
-        <TouchableOpacity style={styles.btn} onPress={handleReset} disabled={loading}>
-          <Text style={styles.btnText}>{loading ? 'Updating…' : 'Reset Password'}</Text>
+        {error ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
+        <TouchableOpacity
+          style={[styles.btn, loading && styles.btnDisabled]}
+          onPress={handleReset}
+          disabled={loading}
+        >
+          {loading
+            ? <ActivityIndicator size="small" color={Colors.white} />
+            : <Text style={styles.btnText}>Reset Password</Text>
+          }
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => router.back()}>
@@ -111,12 +142,19 @@ const styles = StyleSheet.create({
   card: { backgroundColor: Colors.white, borderRadius: Radius.xl, padding: 28, ...Shadow.lg },
   title: { fontSize: 22, fontWeight: '700', color: Colors.navy, marginBottom: 6 },
   sub: { fontSize: 14, color: Colors.textMid, marginBottom: 24, lineHeight: 20 },
+  successEmoji: { fontSize: 48, textAlign: 'center', marginBottom: 12 },
   input: {
     borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.md,
     padding: 14, fontSize: 15, color: Colors.textDark,
     backgroundColor: Colors.cream, marginBottom: 14,
   },
+  errorBox: {
+    backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca',
+    borderRadius: Radius.sm, padding: 12, marginBottom: 12,
+  },
+  errorText: { color: '#dc2626', fontSize: 13.5, textAlign: 'center' },
   btn: { backgroundColor: Colors.navy, borderRadius: Radius.md, padding: 16, alignItems: 'center', marginTop: 4 },
+  btnDisabled: { opacity: 0.6 },
   btnText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
   link: { textAlign: 'center', marginTop: 18, fontSize: 13.5, color: Colors.textMid },
   linkBold: { color: Colors.navy, fontWeight: '600' },

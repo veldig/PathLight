@@ -5,11 +5,11 @@ interface ProfileState {
   profile: Profile | null;
   loading: boolean;
   load: () => Promise<void>;
-  save: (updates: Partial<Omit<Profile, 'user_id'>>) => Promise<void>;
+  save: (updates: Partial<Omit<Profile, 'id'>>) => Promise<void>;
   clear: () => void;
 }
 
-export const useProfileStore = create<ProfileState>((set, get) => ({
+export const useProfileStore = create<ProfileState>((set) => ({
   profile: null,
   loading: false,
 

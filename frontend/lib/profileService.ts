@@ -1,11 +1,7 @@
-/**
- * Profile CRUD goes directly through the Supabase client.
- * RLS on users_profile guarantees each user can only read/write their own row.
- */
 import { supabase } from './supabase';
 
 export interface Profile {
-  user_id: string;
+  id: string;
   name: string;
   state: string;
   income_bracket: string;
@@ -24,24 +20,24 @@ export async function fetchProfile(): Promise<Profile | null> {
   if (!user) return null;
 
   const { data, error } = await supabase
-    .from('users_profile')
+    .from('profiles')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('id', user.id)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
   return data;
 }
 
-export async function upsertProfile(updates: Partial<Omit<Profile, 'user_id'>>): Promise<Profile> {
+export async function upsertProfile(updates: Partial<Omit<Profile, 'id'>>): Promise<Profile> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data, error } = await supabase
-    .from('users_profile')
+    .from('profiles')
     .upsert(
-      { ...updates, user_id: user.id, updated_at: new Date().toISOString() },
-      { onConflict: 'user_id' },
+      { ...updates, id: user.id, updated_at: new Date().toISOString() },
+      { onConflict: 'id' },
     )
     .select()
     .single();
@@ -60,7 +56,6 @@ export async function signOut(): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-/** Returns the current session's access token for FastAPI requests. */
 export async function getAccessToken(): Promise<string | null> {
   const { data: { session } } = await supabase.auth.getSession();
   return session?.access_token ?? null;

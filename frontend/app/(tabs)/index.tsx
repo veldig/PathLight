@@ -1,7 +1,9 @@
 import AgentCard from '@/components/AgentCard';
 import AxoChatbot from '@/components/AxoChatbot';
 import { Colors, Radius, Shadow } from '@/constants/theme';
+import { useProfileStore } from '@/store/profileStore';
 import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const AGENTS = [
@@ -78,6 +80,13 @@ const RECS = [
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { profile, load } = useProfileStore();
+
+  useEffect(() => { load(); }, []);
+
+  const firstName = profile?.name?.split(' ')[0] ?? 'there';
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   return (
     <View style={{ flex: 1 }}>
@@ -88,10 +97,10 @@ export default function HomeScreen() {
             <View style={styles.logoIcon}><Text style={{ fontSize: 18 }}>🌿</Text></View>
             <Text style={styles.logoText}>PathLight</Text>
           </View>
-          <Text style={styles.greeting}>Hi, Maya 👋</Text>
+          <Text style={styles.greeting}>Hi, {firstName} 👋</Text>
         </View>
 
-        <Text style={styles.pageTitle}>Good morning, Maya ☀️</Text>
+        <Text style={styles.pageTitle}>{greeting}, {firstName} ☀️</Text>
         <Text style={styles.pageSub}>Here's your personalized overview. Your agents are working for you.</Text>
 
         {/* Agent cards 2-col grid */}

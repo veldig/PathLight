@@ -7,7 +7,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View
 export default function WellnessScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [checkin, setCheckin] = useState<{ message: string; streak: number } | null>(null);
+  const [checkin, setCheckin] = useState<{ message: string; streak: number; resources?: any[] } | null>(null);
   const [error, setError] = useState('');
 
   async function startCheckin() {
@@ -15,7 +15,7 @@ export default function WellnessScreen() {
     setError('');
     try {
       const result = await api.startCheckin() as any;
-      setCheckin({ message: result.message, streak: result.streak });
+      setCheckin({ message: result.message, streak: result.streak, resources: result.resources });
     } catch (e: any) {
       setError(e.message);
     }
@@ -75,12 +75,19 @@ export default function WellnessScreen() {
             </View>
 
             <View style={styles.resourcesCard}>
-              <Text style={styles.resourcesTitle}>Quick Resources</Text>
-              {[
-                { icon: '💬', title: 'Free Counseling', sub: 'On-campus & virtual · available now' },
-                { icon: '🧘', title: 'Breathing Exercise', sub: '5-minute guided session' },
-                { icon: '📞', title: 'Crisis Hotline', sub: '988 — call or text anytime' },
-              ].map((r, i) => (
+              <Text style={styles.resourcesTitle}>Matched Resources For You</Text>
+              {(checkin.resources && checkin.resources.length > 0
+                ? checkin.resources.map((r: any) => ({
+                    icon: r.type === 'crisis' ? '📞' : r.type === 'counseling' ? '💬' : r.type === 'breathing' ? '🧘' : r.type === 'community' ? '👥' : '🌿',
+                    title: r.name,
+                    sub: r.contact || r.url || '',
+                  }))
+                : [
+                    { icon: '📞', title: '988 Crisis Lifeline', sub: 'Call or text 988 anytime' },
+                    { icon: '💬', title: 'Open Path Therapy', sub: '$30–$80/session · openpath.care' },
+                    { icon: '🧘', title: '4-7-8 Breathing', sub: 'Inhale 4 · hold 7 · exhale 8' },
+                  ]
+              ).map((r: any, i: number) => (
                 <TouchableOpacity key={i} style={styles.resourceRow}>
                   <View style={styles.resourceIcon}><Text style={{ fontSize: 18 }}>{r.icon}</Text></View>
                   <View style={{ flex: 1 }}>

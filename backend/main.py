@@ -1,7 +1,8 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI
+import os
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers import profile, edupath, fundfinder, careerboost, wellness, chat, calendar
@@ -28,3 +29,22 @@ app.include_router(calendar.router, prefix="/calendar", tags=["calendar"])
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/admin/scrape")
+def admin_scrape(x_admin_key: str = Header(None)):
+    """Seed all ML tables with scraped + curated data. Requires X-Admin-Key header."""
+    expected = os.environ.get("ADMIN_KEY", "")
+    if not expected or x_admin_key != expected:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    from scrapers import fundfinder_scraper, careerboost_scraper, edupath_scraper, wellness_scraper
+    return {
+        "status": "ok",
+        "seeded": {
+            "scholarships": fundfinder_scraper.run(force=True),
+            "jobs": careerboost_scraper.run(force=True),
+            "courses": edupath_scraper.run(force=True),
+            "wellness_resources": wellness_scraper.run(force=True),
+        },
+    }

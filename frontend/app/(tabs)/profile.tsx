@@ -63,16 +63,18 @@ export default function ProfileScreen() {
   }
 
   async function handleSignOut() {
-    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out', style: 'destructive',
-        onPress: async () => {
-          await signOut();
-          router.replace('/(auth)/login');
-        },
-      },
-    ]);
+    const confirmed = Platform.OS === 'web'
+      ? window.confirm('Are you sure you want to sign out?')
+      : await new Promise<boolean>((resolve) =>
+          Alert.alert('Sign out', 'Are you sure?', [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Sign Out', style: 'destructive', onPress: () => resolve(true) },
+          ])
+        );
+    if (!confirmed) return;
+    await signOut();
+    useProfileStore.getState().clear();
+    router.replace('/(auth)/login');
   }
 
   const data = editing ? draft : profile;

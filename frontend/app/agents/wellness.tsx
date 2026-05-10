@@ -34,6 +34,18 @@ export default function WellnessScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
+        {/* Therapist booking entry point */}
+        <TouchableOpacity style={styles.therapistBanner} onPress={() => router.push('/agents/therapists')}>
+          <View style={styles.therapistBannerLeft}>
+            <Text style={styles.therapistBannerEmoji}>🧑‍⚕️</Text>
+            <View>
+              <Text style={styles.therapistBannerTitle}>Find a Therapist</Text>
+              <Text style={styles.therapistBannerSub}>Affordable telehealth · from $30/session</Text>
+            </View>
+          </View>
+          <Text style={styles.therapistBannerArrow}>›</Text>
+        </TouchableOpacity>
+
         {!checkin && !loading && (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyEmoji}>🌱</Text>
@@ -144,4 +156,21 @@ const styles = StyleSheet.create({
   resourceSub: { fontSize: 12, color: Colors.textMid, marginTop: 1 },
   refreshBtn: { alignItems: 'center', padding: 14 },
   refreshText: { color: Colors.lavenderMid, fontWeight: '600', fontSize: 14 },
+  therapistBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    padding: 16,
+    marginBottom: 12,
+    ...Shadow.sm,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.lavenderMid,
+  },
+  therapistBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  therapistBannerEmoji: { fontSize: 28 },
+  therapistBannerTitle: { fontSize: 15, fontWeight: '700', color: Colors.textDark },
+  therapistBannerSub: { fontSize: 12, color: Colors.textMid, marginTop: 2 },
+  therapistBannerArrow: { fontSize: 22, color: Colors.textLight },
 });

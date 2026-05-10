@@ -6,7 +6,7 @@ import os
 import uuid
 import re
 import httpx
-from lib.supabase_client import get_supabase
+from lib.mongo_client import get_mongo
 from ml.embeddings import embed_batch
 
 CURATED = [
@@ -148,10 +148,9 @@ def _embed_text(j: dict) -> str:
 
 
 def run(force: bool = False) -> int:
-    sb = get_supabase()
+    db = get_mongo()
     if not force:
-        existing = sb.table("jobs").select("id", count="exact").execute()
-        if (existing.count or 0) >= 5:
+        if db["jobs"].count_documents({}) >= 5:
             return 0
 
     all_jobs = CURATED.copy()
@@ -191,7 +190,8 @@ def run(force: bool = False) -> int:
         for i, j in enumerate(all_jobs)
     ]
 
-    sb.table("jobs").upsert(rows).execute()
+    for row in rows:
+        db["jobs"].update_one({"title": row["title"], "company": row["company"]}, {"$set": row}, upsert=True)
     return len(rows)
 
 

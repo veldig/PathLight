@@ -4,7 +4,7 @@ import { create } from 'zustand';
 interface AuthState {
   session: Session | null;
   user: User | null;
-  loaded: boolean; // true once Supabase has resolved the initial session
+  loaded: boolean;
   setSession: (session: Session | null) => void;
 }
 

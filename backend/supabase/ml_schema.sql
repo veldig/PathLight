@@ -3,6 +3,31 @@
 
 create extension if not exists vector;
 
+-- ─── Wellness Streaks ────────────────────────────────────────────────────────
+create table if not exists wellness_streaks (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  current_streak integer default 1,
+  last_checkin date default current_date,
+  updated_at timestamptz default now()
+);
+
+alter table wellness_streaks enable row level security;
+create policy "Users manage own streak" on wellness_streaks
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ─── Wellness Check-in Log ────────────────────────────────────────────────────
+create table if not exists wellness_checkins (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  message text,
+  mood text,
+  created_at timestamptz default now()
+);
+
+alter table wellness_checkins enable row level security;
+create policy "Users manage own checkins" on wellness_checkins
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
 -- ─── Scholarships / Funding Opportunities ───────────────────────────────────
 create table if not exists scholarships (
   id uuid primary key default gen_random_uuid(),

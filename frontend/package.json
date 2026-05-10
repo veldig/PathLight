@@ -6,7 +6,9 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:web": "npx expo export --platform web",
+    "serve": "npx serve dist --listen $PORT"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
@@ -20,6 +22,9 @@
     "expo-linking": "~8.0.12",
     "expo-router": "~6.0.23",
     "expo-status-bar": "~3.0.9",
+    "expo-av": "~15.0.2",
+    "expo-camera": "~16.0.18",
+    "expo-file-system": "~18.0.12",
     "expo-web-browser": "~15.0.11",
     "react": "19.1.0",
     "react-dom": "^19.1.0",

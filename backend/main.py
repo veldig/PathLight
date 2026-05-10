@@ -29,6 +29,17 @@ app.include_router(therapists.router, prefix="/agents/wellness/therapists", tags
 app.include_router(focuspath.router, prefix="/agents/focuspath", tags=["focuspath"])
 
 
+@app.get("/")
+def root():
+    return {
+        "name": "PathLight API",
+        "version": "1.0.0",
+        "status": "running",
+        "docs": "/docs",
+        "health": "/health",
+    }
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}

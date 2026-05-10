@@ -23,3 +23,12 @@ class ChatMessage(BaseModel):
 
 class ConfirmAction(BaseModel):
     confirmed: bool
+
+
+class AutoApplyPreviewRequest(BaseModel):
+    url: str
+
+
+class AutoApplySubmitRequest(BaseModel):
+    url: str
+    filled_values: list[dict]

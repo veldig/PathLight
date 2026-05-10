@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from anthropic import Anthropic
 from middleware.auth import get_current_user_id
 from lib.supabase_client import get_supabase
-from models.schema import ConfirmAction
+from models.schema import ConfirmAction, AutoApplyPreviewRequest, AutoApplySubmitRequest
 from ml.matcher import match_jobs, table_is_empty
 
 router = APIRouter()
@@ -70,3 +70,27 @@ def confirm_application(
     if not body.confirmed:
         return {"status": "cancelled", "id": job_id}
     return {"status": "applied", "id": job_id, "message": "Application submitted successfully."}
+
+
+@router.post("/auto-apply/preview")
+async def auto_apply_preview(
+    body: AutoApplyPreviewRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Fill a job application form using the user's profile. Returns preview for review."""
+    sb = get_supabase()
+    profile = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute().data or {}
+    from agents.form_agent import preview
+    return await preview(body.url, profile)
+
+
+@router.post("/auto-apply/submit")
+async def auto_apply_submit(
+    body: AutoApplySubmitRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Re-fill and submit the job application with user-confirmed field values."""
+    sb = get_supabase()
+    profile = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute().data or {}
+    from agents.form_agent import confirm_and_submit
+    return await confirm_and_submit(body.url, profile, body.filled_values)

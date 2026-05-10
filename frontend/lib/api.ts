@@ -31,12 +31,20 @@ export const api = {
   getFundingOpportunities: () => request('/agents/fundfinder/opportunities'),
   confirmFundingApplication: (id: string) =>
     request(`/agents/fundfinder/confirm/${id}`, { method: 'POST' }),
+  autoApplyFundingPreview: (url: string) =>
+    request('/agents/fundfinder/auto-apply/preview', { method: 'POST', body: JSON.stringify({ url }) }),
+  autoApplyFundingSubmit: (url: string, filled_values: any[]) =>
+    request('/agents/fundfinder/auto-apply/submit', { method: 'POST', body: JSON.stringify({ url, filled_values }) }),
 
   // CareerBoost
   searchJobs: () => request('/agents/careerboost/search', { method: 'POST' }),
   getJobs: () => request('/agents/careerboost/jobs'),
   confirmJobApplication: (id: string) =>
     request(`/agents/careerboost/confirm/${id}`, { method: 'POST' }),
+  autoApplyJobPreview: (url: string) =>
+    request('/agents/careerboost/auto-apply/preview', { method: 'POST', body: JSON.stringify({ url }) }),
+  autoApplyJobSubmit: (url: string, filled_values: any[]) =>
+    request('/agents/careerboost/auto-apply/submit', { method: 'POST', body: JSON.stringify({ url, filled_values }) }),
 
   // WellnessGuide
   startCheckin: () => request('/agents/wellness/checkin', { method: 'POST' }),

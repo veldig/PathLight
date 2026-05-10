@@ -1,10 +1,12 @@
 import os
 import json
+import asyncio
 from fastapi import APIRouter, Depends
 from anthropic import Anthropic
 from middleware.auth import get_current_user_id
 from lib.supabase_client import get_supabase
 from ml.matcher import match_scholarships, table_is_empty
+from models.schema import AutoApplyPreviewRequest, AutoApplySubmitRequest
 
 router = APIRouter()
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
@@ -131,3 +133,27 @@ def search(user_id: str = Depends(get_current_user_id)):
         data = {"error": "Failed to parse response", "raw": raw}
 
     return {"financial_plan": data}
+
+
+@router.post("/auto-apply/preview")
+async def auto_apply_preview(
+    body: AutoApplyPreviewRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Fill the scholarship/grant application form using the user's profile. Returns preview for review."""
+    sb = get_supabase()
+    profile = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute().data or {}
+    from agents.form_agent import preview
+    return await preview(body.url, profile)
+
+
+@router.post("/auto-apply/submit")
+async def auto_apply_submit(
+    body: AutoApplySubmitRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Re-fill and submit the application with the user-confirmed field values."""
+    sb = get_supabase()
+    profile = sb.table("profiles").select("*").eq("id", user_id).maybe_single().execute().data or {}
+    from agents.form_agent import confirm_and_submit
+    return await confirm_and_submit(body.url, profile, body.filled_values)

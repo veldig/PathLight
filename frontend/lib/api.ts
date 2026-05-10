@@ -36,7 +36,6 @@ export const api = {
 
   // FundFinder
   searchFunding: () => request('/agents/fundfinder/search', { method: 'POST' }),
-  getFundingOpportunities: () => request('/agents/fundfinder/opportunities'),
   confirmFundingApplication: (id: string) =>
     request(`/agents/fundfinder/confirm/${id}`, { method: 'POST' }),
   autoApplyFundingPreview: (url: string) =>
@@ -46,7 +45,6 @@ export const api = {
 
   // CareerBoost
   searchJobs: () => request('/agents/careerboost/search', { method: 'POST' }),
-  getJobs: () => request('/agents/careerboost/jobs'),
   confirmJobApplication: (id: string) =>
     request(`/agents/careerboost/confirm/${id}`, { method: 'POST' }),
   autoApplyJobPreview: (url: string) =>

@@ -49,8 +49,8 @@ export default function RegisterScreen() {
       await saveAuth(data.token, { userId: data.user_id, email: data.email });
       setAuth(data.token, data.user_id, data.email);
       router.replace('/(auth)/onboarding');
-    } catch {
-      setError('Unable to connect. Check your internet connection.');
+    } catch (err: any) {
+      setError(`Connection error: ${err?.message ?? err} — API: ${API_BASE}`);
     } finally {
       setLoading(false);
     }

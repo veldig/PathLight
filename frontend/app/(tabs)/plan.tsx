@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 const MILESTONES = [
   { label: 'Complete FAFSA application', done: true, tag: 'FundFinder' },
-  { label: 'Register for Spring semester', done: true, tag: 'EduPath' },
+  { label: 'Complete Psychology 101 adaptive session', done: true, tag: 'FocusPath' },
   { label: 'Apply for Student Parent Scholarship', done: false, tag: 'FundFinder' },
   { label: 'Submit resume to CareerBoost', done: false, tag: 'CareerBoost' },
   { label: 'Schedule therapy intake session', done: false, tag: 'Wellness' },

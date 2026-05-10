@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 import bcrypt
 import jwt
+import httpx
 from lib.mongo_client import get_mongo
 
 router = APIRouter()
@@ -28,6 +29,10 @@ class LoginRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     email: str
     new_password: str
+
+
+class GoogleAuthRequest(BaseModel):
+    access_token: str
 
 
 def create_token(user_id: str) -> str:
@@ -86,6 +91,67 @@ def login(body: LoginRequest):
 
     token = create_token(str(user["_id"]))
     return {"token": token, "user_id": str(user["_id"]), "email": user["email"]}
+
+
+@router.post("/google")
+def google_auth(body: GoogleAuthRequest):
+    # Verify token with Google and get user profile
+    with httpx.Client() as client:
+        r = client.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {body.access_token}"},
+            timeout=10,
+        )
+    if r.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+
+    profile = r.json()
+    email = profile.get("email")
+    name = profile.get("name", email.split("@")[0] if email else "User")
+    google_id = profile.get("id")
+
+    if not email:
+        raise HTTPException(status_code=400, detail="No email returned from Google")
+
+    db = get_mongo()
+    user = db["users"].find_one({"email": email})
+
+    if not user:
+        # New user — create account automatically
+        user_id = str(uuid.uuid4())
+        db["users"].insert_one({
+            "_id": user_id,
+            "email": email,
+            "name": name,
+            "google_id": google_id,
+            "password": None,
+            "created_at": datetime.utcnow().isoformat(),
+        })
+        db["profiles"].update_one(
+            {"_id": user_id},
+            {"$setOnInsert": {
+                "_id": user_id,
+                "name": name,
+                "state": "",
+                "income_bracket": "",
+                "family_size": 1,
+                "child_ages": [],
+                "education_level": "",
+                "field_of_study": "",
+                "skills": [],
+                "hours_per_week": 0,
+                "childcare_needed": False,
+            }},
+            upsert=True,
+        )
+    else:
+        user_id = str(user["_id"])
+        # Update google_id if signing in with Google for first time
+        if not user.get("google_id"):
+            db["users"].update_one({"_id": user_id}, {"$set": {"google_id": google_id}})
+
+    token = create_token(user_id)
+    return {"token": token, "user_id": user_id, "email": email, "name": name}
 
 
 @router.post("/reset-password")

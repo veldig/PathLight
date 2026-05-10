@@ -30,6 +30,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   loadFromStorage: async () => {
     try {
       const [token, user] = await Promise.all([getStoredToken(), getStoredUser()]);
+      // HS256 header = base64url({"alg":"HS256","typ":"JWT"}) = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+      // Old Supabase tokens use RS256 and have a different header — clear them to force re-login
+      if (token && !token.startsWith('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9')) {
+        await clearAuthData();
+        set({ token: null, user: null, loaded: true });
+        return;
+      }
       set({ token, user, loaded: true });
     } catch {
       set({ loaded: true });

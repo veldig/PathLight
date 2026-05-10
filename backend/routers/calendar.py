@@ -5,7 +5,7 @@ from lib.supabase_client import get_supabase
 router = APIRouter()
 
 SEED_EVENTS = [
-    {"id": "1", "agent": "edupath",     "title": "Class: Psychology 101", "datetime": "2026-05-12T10:00:00", "type": "class"},
+    {"id": "1", "agent": "focuspath",   "title": "Study Session: Psychology 101", "datetime": "2026-05-12T10:00:00", "type": "class"},
     {"id": "2", "agent": "careerboost", "title": "Job Application Deadline", "datetime": "2026-05-13T23:59:00", "type": "deadline"},
     {"id": "3", "agent": "fundfinder",  "title": "Grant Confirmation Due", "datetime": "2026-05-14T23:59:00", "type": "deadline"},
     {"id": "4", "agent": "wellness",    "title": "Therapy Session", "datetime": "2026-05-16T14:00:00", "type": "appointment"},

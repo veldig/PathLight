@@ -29,10 +29,6 @@ export const api = {
   updateProfile: (data: Partial<UserProfile>) =>
     request<UserProfile>('/profile', { method: 'PUT', body: JSON.stringify(data) }),
 
-  // EduPath
-  analyzeEducation: () => request('/agents/edupath/analyze', { method: 'POST' }),
-  getEducationPlan: () => request('/agents/edupath/plan'),
-
   // FundFinder
   searchFunding: () => request('/agents/fundfinder/search', { method: 'POST' }),
   confirmFundingApplication: (id: string) =>

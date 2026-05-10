@@ -5,7 +5,7 @@ import os
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import profile, edupath, fundfinder, careerboost, wellness, chat, calendar, therapists, focuspath
+from routers import profile, fundfinder, careerboost, wellness, chat, calendar, therapists, focuspath
 
 app = FastAPI(title="PathLight API", version="1.0.0")
 
@@ -18,7 +18,6 @@ app.add_middleware(
 )
 
 app.include_router(profile.router, prefix="/profile", tags=["profile"])
-app.include_router(edupath.router, prefix="/agents/edupath", tags=["edupath"])
 app.include_router(fundfinder.router, prefix="/agents/fundfinder", tags=["fundfinder"])
 app.include_router(careerboost.router, prefix="/agents/careerboost", tags=["careerboost"])
 app.include_router(wellness.router, prefix="/agents/wellness", tags=["wellness"])
@@ -40,13 +39,12 @@ def admin_scrape(x_admin_key: str = Header(None)):
     if not expected or x_admin_key != expected:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    from scrapers import fundfinder_scraper, careerboost_scraper, edupath_scraper, wellness_scraper, therapist_scraper
+    from scrapers import fundfinder_scraper, careerboost_scraper, wellness_scraper, therapist_scraper
     return {
         "status": "ok",
         "seeded": {
             "scholarships": fundfinder_scraper.run(force=True),
             "jobs": careerboost_scraper.run(force=True),
-            "courses": edupath_scraper.run(force=True),
             "wellness_resources": wellness_scraper.run(force=True),
             "therapists": therapist_scraper.run(force=True),
         },

@@ -158,7 +158,7 @@ export async function syncToGoogleCalendar(
 function agentColorId(agent: string): string {
   // Google Calendar color IDs 1-11
   const map: Record<string, string> = {
-    edupath: '2',      // sage/green
+    focuspath: '2',    // sage/green
     fundfinder: '6',   // tangerine/orange
     careerboost: '9',  // blueberry
     wellness: '3',     // grape/lavender

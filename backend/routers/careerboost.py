@@ -1,4 +1,6 @@
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from fastapi import APIRouter, Depends
 from anthropic import Anthropic
 from middleware.auth import get_current_user_id
@@ -16,11 +18,19 @@ def search(user_id: str = Depends(get_current_user_id)):
     db = get_mongo()
     profile = db["profiles"].find_one({"_id": user_id}) or {}
 
+    # Seed collection in background so the request doesn't block
     if table_is_empty("jobs"):
         from scrapers import careerboost_scraper
-        careerboost_scraper.run()
+        threading.Thread(target=careerboost_scraper.run, daemon=True).start()
 
-    matched = match_jobs(profile, limit=5)
+    # ML matching with timeout — fastembed can be slow on cold start
+    matched = []
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(match_jobs, profile, 5)
+            matched = future.result(timeout=8)
+    except Exception:
+        pass
 
     if matched:
         job_lines = "\n".join(

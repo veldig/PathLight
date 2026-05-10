@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Modal,
   ScrollView,
   StyleSheet,
@@ -249,8 +250,14 @@ export default function CareerBoostScreen() {
                           <Text style={styles.fieldValue}>{String(v)}</Text>
                         </View>
                       ))}
-                      <TouchableOpacity style={[styles.actionBtn, { marginTop: 20 }]} onPress={closeAgent}>
-                        <Text style={styles.actionBtnText}>Close</Text>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, { marginTop: 20 }]}
+                        onPress={() => Linking.openURL(agent.url)}
+                      >
+                        <Text style={styles.actionBtnText}>Open Application Page →</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.manualBtn, { marginTop: 10, paddingVertical: 14 }]} onPress={closeAgent}>
+                        <Text style={styles.manualBtnText}>Close</Text>
                       </TouchableOpacity>
                     </>
                   ) : (

@@ -555,7 +555,7 @@ def _fallback_no_playwright(url: str, profile: dict) -> dict:
     form_type = _detect_form_type(url)
     return {
         "status": "playwright_unavailable",
-        "message": "Browser automation is starting up (first-run model download). Try again in 30 seconds, or use the Quick Answer Sheet below.",
+        "message": "We've pre-filled your answers below. Copy them, then tap \"Open Application Page\" to apply — paste your info right into the form.",
         "url": url,
         "quick_answers": _build_quick_answers(profile, form_type),
     }

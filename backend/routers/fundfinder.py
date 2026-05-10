@@ -1,6 +1,8 @@
 import os
 import json
 import asyncio
+import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from fastapi import APIRouter, Depends
 from anthropic import Anthropic
 from middleware.auth import get_current_user_id
@@ -107,11 +109,19 @@ def search(user_id: str = Depends(get_current_user_id)):
     db = get_mongo()
     profile = db["profiles"].find_one({"_id": user_id}) or {}
 
+    # Seed collection in background so the request doesn't block
     if table_is_empty("scholarships"):
         from scrapers import fundfinder_scraper
-        fundfinder_scraper.run()
+        threading.Thread(target=fundfinder_scraper.run, daemon=True).start()
 
-    real_scholarships = match_scholarships(profile, limit=6)
+    # ML matching with timeout — fastembed can be slow on cold start
+    real_scholarships = []
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(match_scholarships, profile, 6)
+            real_scholarships = future.result(timeout=8)
+    except Exception:
+        pass
 
     prompt = build_prompt(profile, real_scholarships)
 

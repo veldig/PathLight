@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Modal,
   ScrollView,
   StyleSheet,
@@ -323,7 +324,13 @@ export default function FundFinderScreen() {
                           </View>
                         ))}
                       </View>
-                      <TouchableOpacity style={[styles.btn, { backgroundColor: Colors.textLight, marginTop: 20 }]} onPress={closeAgent}>
+                      <TouchableOpacity
+                        style={[styles.btn, { backgroundColor: ACCENT, marginTop: 20 }]}
+                        onPress={() => Linking.openURL(agent.url)}
+                      >
+                        <Text style={{ color: Colors.white, fontWeight: '700', textAlign: 'center' }}>Open Application Page →</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.btn, { backgroundColor: Colors.textLight, marginTop: 10 }]} onPress={closeAgent}>
                         <Text style={{ color: Colors.white, fontWeight: '700', textAlign: 'center' }}>Close</Text>
                       </TouchableOpacity>
                     </>

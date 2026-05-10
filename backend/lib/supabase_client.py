@@ -11,3 +11,11 @@ def get_supabase() -> Client:
         key = os.environ["SUPABASE_SERVICE_KEY"]
         _client = create_client(url, key)
     return _client
+
+
+def get_user_email(user_id: str) -> str:
+    try:
+        resp = get_supabase().auth.admin.get_user_by_id(user_id)
+        return resp.user.email or ""
+    except Exception:
+        return ""
